@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NC旋盤プログラム描画ツール</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #d0d4da;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --canvas-bg: #fbfcfd;
+    --grid: #e3e6ea;
+    --axis: #9aa1ab;
+    --center: #b06060;
+    --hl: #fff3b0;
+    --rapid: #9aa1ab;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b;
+      --panel: #1c2026;
+      --border: #333a44;
+      --text: #e6e9ee;
+      --muted: #9aa1ab;
+      --canvas-bg: #0f1216;
+      --grid: #222831;
+      --axis: #566072;
+      --center: #c07a7a;
+      --hl: #4a4320;
+      --rapid: #667085;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+  header {
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+  .controls label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  button {
+    font: inherit; font-size: 13px; padding: 4px 10px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  .transport {
+    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+    background: var(--panel); border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .transport button { min-width: 34px; padding: 4px 8px; }
+  .transport .seek { flex: 1; min-width: 120px; cursor: pointer; }
+  .transport .spd { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+  .transport .spd input { width: 90px; }
+  #playInfo { min-width: 130px; text-align: right; font-variant-numeric: tabular-nums; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .canvas-wrap { flex: 1; position: relative; min-width: 0; background: var(--canvas-bg); }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #tooltip {
+    position: absolute; pointer-events: none; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 9px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+    display: none; white-space: nowrap; max-width: 320px;
+  }
+  #tooltip b { font-weight: 600; }
+  .side {
+    width: 340px; border-left: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .side-head { padding: 6px 10px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .src { flex: 1; overflow: auto; font-family: "Consolas","Courier New",monospace; font-size: 12px; }
+  .src .ln { display: flex; padding: 0 8px; white-space: pre; }
+  .src .ln:hover { background: var(--grid); }
+  .src .ln.hl { background: var(--hl); }
+  .src .num { color: var(--muted); width: 34px; text-align: right; margin-right: 10px; user-select: none; flex: none; }
+  .legend { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px; }
+  .legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .legend .orow { flex-wrap: wrap; }
+  .legend .orow .oin { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-size: 11px; }
+  .legend .orow input { width: 54px; font: inherit; font-size: 11px; padding: 1px 3px;
+    background: var(--canvas-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+  .swatch { width: 22px; height: 3px; border-radius: 2px; flex: none; }
+  .dash { background: repeating-linear-gradient(90deg, var(--rapid) 0 4px, transparent 4px 7px); height: 0; border-top: 2px dashed var(--rapid); }
+  .hint { color: var(--muted); font-size: 11px; }
+  .drop-hint {
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background: rgba(80,120,200,.12); border: 3px dashed #5b8def; color:#5b8def; font-size:18px; z-index:20;
+  }
+  .empty-hint {
+    position:absolute; inset:0; display:flex; flex-direction:column; gap:8px;
+    align-items:center; justify-content:center; text-align:center; color: var(--muted);
+    font-size:16px; z-index:5; pointer-events:none;
+  }
+  .empty-hint .sub { font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>NC旋盤 ツールパス描画</h1>
+  <div class="controls">
+    <button id="loadBtn">ファイルを開く</button>
+    <input type="file" id="fileInput" accept=".nc,.txt,.tap,.cnc,.min,*" style="display:none">
+    <button id="resetView">ビューリセット</button>
+    <label><input type="checkbox" id="showRapid" checked> 早送り(G0)</label>
+    <label><input type="checkbox" id="showLabels" checked> ラベル</label>
+    <label><input type="checkbox" id="showDir"> 方向</label>
+    <label><input type="checkbox" id="flipArc"> 円弧向き反転</label>
+    <span class="hint">ホイール=ズーム / ドラッグ=移動</span>
+  </div>
+</header>
+<div class="transport">
+  <button id="btnRewind" title="先頭へ">⏮</button>
+  <button id="btnStepBack" title="前のブロック">◀</button>
+  <button id="btnPlay" title="再生/一時停止">▶</button>
+  <button id="btnStepFwd" title="次のブロック">▶|</button>
+  <input type="range" id="seek" min="0" max="1000" value="1000" class="seek">
+  <span class="hint" id="playInfo">全表示</span>
+  <label class="spd">速度 <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1"></label>
+</div>
+<div class="main">
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="cv"></canvas>
+    <div id="tooltip"></div>
+    <div class="drop-hint" id="dropHint">NCファイルをドロップ</div>
+    <div class="empty-hint" id="emptyHint">
+      <div>NCプログラムを読み込んでください</div>
+      <div class="sub">「ファイルを開く」ボタン、またはこの画面にドラッグ&ドロップ</div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="side-head"><span id="fileName">（未読み込み）</span><span class="hint" id="segCount"></span></div>
+    <div class="src" id="src"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// 工具ステーション → 色
+const TOOL_COLORS = {
+  0: "#8a8f98",
+  1: "#3b82f6",
+  2: "#f97316",
+  3: "#22c55e",
+  4: "#a855f7",
+  5: "#ec4899",
+  6: "#14b8a6",
+  7: "#eab308",
+  8: "#ef4444",
+};
+function toolColor(t) { return TOOL_COLORS[t] ?? "#8a8f98"; }
+
+// ===== パーサ =====
+// 非切削G指令（これらを含む行は移動描画をスキップ、または位置設定のみ）
+// origins: { toolStation: {x(直径), z} } 工具切替時にその原位置からアプローチを描く
+function parseNc(text, origins) {
+  origins = origins || {};
+  const segs = [];
+  const toolsSeen = new Set();
+  const rawLines = text.split(/\r?\n/);
+
+  let motion = 0;      // モーダル 0/1/2/3
+  let x = 0, z = 0;    // 現在絶対位置（x=直径）
+  let tool = 0;
+  let feed = 0;        // モーダル送り速度
+  let posKnown = false;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const lineNo = i + 1;
+    let line = rawLines[i];
+    // 括弧内（コメント/代替値）を全削除
+    line = line.replace(/\([^)]*\)/g, "");
+    line = line.trim();
+    if (!line || line === "%") continue;
+
+    // トークン化: 英字 + 数値
+    const words = [];
+    const re = /([A-Za-z])\s*([+-]?[0-9]*\.?[0-9]+)/g;
+    let m;
+    while ((m = re.exec(line)) !== null) {
+      words.push({ letter: m[1].toUpperCase(), value: parseFloat(m[2]) });
+    }
+    if (!words.length) continue;
+
+    // Gコードを収集
+    const gcodes = words.filter(w => w.letter === "G").map(w => w.value);
+    const isDwell = gcodes.includes(4);
+    const isG28 = gcodes.includes(28);
+    const isG50 = gcodes.includes(50);
+    // モーダル motion を更新（G0-G3 のみ）
+    for (const g of gcodes) {
+      if (g === 0 || g === 1 || g === 2 || g === 3) motion = g;
+    }
+
+    // 送り速度更新
+    for (const w of words) if (w.letter === "F") feed = w.value;
+
+    // 工具更新（ステーションが変化したら原位置へリセット）
+    for (const w of words) {
+      if (w.letter === "T") {
+        const v = Math.abs(Math.round(w.value));
+        const st = v >= 100 ? Math.floor(v / 100) : v;
+        if (st !== tool) {
+          tool = st;
+          const o = origins[tool];
+          if (o && isFinite(o.x) && isFinite(o.z)) {
+            // 原位置から次の移動をアプローチとして描くため位置を確定
+            x = o.x; z = o.z; posKnown = true;
+          }
+        }
+      }
+    }
+
+    // 座標語を収集（motionで使う候補）
+    let hasMove = false;
+    let nx = x, nz = z;
+    let rArc = null;
+    for (const w of words) {
+      switch (w.letter) {
+        case "X": nx = w.value; hasMove = true; break;             // 絶対直径
+        case "Z": nz = w.value; hasMove = true; break;             // 絶対
+        case "U": nx = x + w.value; hasMove = true; break;         // 増分直径
+        case "W": nz = z + w.value; hasMove = true; break;         // 増分
+        case "R": rArc = w.value; break;
+      }
+    }
+
+    // ドウェル(G4)/原点復帰(G28)行は移動として扱わない
+    if (isDwell) continue;
+    if (isG28) { posKnown = false; continue; }
+
+    if (!hasMove) continue;
+
+    // G50: 座標設定 → 位置確定のみ、線は引かない
+    if (isG50) { x = nx; z = nz; posKnown = true; continue; }
+
+    if (!posKnown) {
+      // 最初の位置確定（線を引かない）
+      x = nx; z = nz; posKnown = true;
+      continue;
+    }
+
+    // セグメント追加
+    const seg = {
+      type: motion, tool, feed,
+      x0: x, z0: z, x1: nx, z1: nz,
+      r: (motion === 2 || motion === 3) ? rArc : null,
+      line: lineNo,
+    };
+    segs.push(seg);
+    toolsSeen.add(tool);
+    x = nx; z = nz;
+  }
+
+  // 再生用の所要時間を算出（早送りは速く）
+  const RAPID_SPEED = 12;   // 早送り相当の速さ（大きいほど速い）
+  let totalT = 0;
+  const cumT = [0];
+  for (const s of segs) {
+    const len = segLength(s);
+    const spd = s.type === 0 ? RAPID_SPEED : Math.max(s.feed || 0.2, 0.02);
+    s.dur = Math.max(len / spd, 1e-4);
+    totalT += s.dur;
+    cumT.push(totalT);
+  }
+
+  return { segs, tools: [...toolsSeen].sort((a, b) => a - b), rawLines, cumT, totalT: totalT || 1 };
+}
+
+// セグメントの幾何長（(z, r)平面、r=x/2）
+function segLength(s) {
+  if (s.type === 2 || s.type === 3) {
+    const ap = arcParams(s, false);
+    if (ap) {
+      let sweep = ap.a1 - ap.a0;
+      if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; } else { while (sweep < 0) sweep += 2 * Math.PI; }
+      return Math.abs(sweep) * ap.R;
+    }
+  }
+  return Math.hypot(s.z1 - s.z0, (s.x1 - s.x0) / 2);
+}
+
+// ===== 状態 =====
+let origins = {}; // { toolStation: {x(直径), z} }
+let state = {
+  data: null,
+  fileName: "（未読み込み）",
+  // ビュー変換（ワールド=(z, r) → スクリーン）
+  scale: 1, offsetX: 0, offsetY: 0,
+  fitDone: false,
+  hoverSeg: null,
+  // 再生
+  playing: false,
+  playhead: 1,   // 0..1（全体進捗）。1=全表示
+  speed: 1,      // 再生速度倍率
+};
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const tooltip = document.getElementById("tooltip");
+const wrap = document.getElementById("canvasWrap");
+
+// world → screen
+function wx(z) { return z * state.scale + state.offsetX; }
+function wy(r) { return -r * state.scale + state.offsetY; } // 画面はy下向き、rは上向き
+// screen → world
+function sxToZ(px) { return (px - state.offsetX) / state.scale; }
+function syToR(py) { return -(py - state.offsetY) / state.scale; }
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+function bounds() {
+  const d = state.data;
+  let minZ = Infinity, maxZ = -Infinity, maxR = 0;
+  for (const s of d.segs) {
+    const r0 = Math.abs(s.x0) / 2, r1 = Math.abs(s.x1) / 2;
+    minZ = Math.min(minZ, s.z0, s.z1);
+    maxZ = Math.max(maxZ, s.z0, s.z1);
+    maxR = Math.max(maxR, r0, r1);
+  }
+  if (!isFinite(minZ)) { minZ = -10; maxZ = 10; maxR = 10; }
+  return { minZ, maxZ, maxR };
+}
+
+function fitView() {
+  const b = bounds();
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const pad = 40;
+  const spanZ = Math.max(b.maxZ - b.minZ, 1);
+  const spanR = Math.max(b.maxR * 2, 1); // 上下対称なので 2*maxR
+  const sx = (w - pad * 2) / spanZ;
+  const sy = (h - pad * 2) / spanR;
+  state.scale = Math.min(sx, sy);
+  const cz = (b.minZ + b.maxZ) / 2;
+  state.offsetX = w / 2 - cz * state.scale;
+  state.offsetY = h / 2; // r=0 が縦中央
+  state.fitDone = true;
+}
+
+// 円弧の中心を計算（(z,r)平面）。G2=CW, G3=CCW（画面座標系ではなく数学座標=r上向き）
+function arcParams(s, flip) {
+  const z0 = s.z0, r0 = s.x0 / 2, z1 = s.z1, r1 = s.x1 / 2;
+  const R = Math.abs(s.r);
+  const dz = z1 - z0, dr = r1 - r0;
+  const d = Math.hypot(dz, dr);
+  if (d < 1e-9 || R < d / 2) return null;
+  const mx = (z0 + z1) / 2, my = (r0 + r1) / 2;
+  const h = Math.sqrt(Math.max(R * R - (d / 2) * (d / 2), 0));
+  // 弦に垂直な単位ベクトル
+  const ux = -dr / d, uy = dz / d;
+  let cw = (s.type === 2); // G2=CW
+  if (flip) cw = !cw;
+  // 2つの中心候補。向きと劣弧(R>0)で選択する。
+  // 候補A: 中点 + h*u, 候補B: 中点 - h*u
+  const cands = [
+    { cz: mx + ux * h, cr: my + uy * h },
+    { cz: mx - ux * h, cr: my - uy * h },
+  ];
+  // r=R>0 は劣弧。中心を選んで、start→endが指定回転方向かつ劣弧になるものを採用
+  for (const c of cands) {
+    const a0 = Math.atan2(r0 - c.cr, z0 - c.cz);
+    const a1 = Math.atan2(r1 - c.cr, z1 - c.cz);
+    let sweep = a1 - a0;
+    // CW(数学座標で時計回り=角度減少)
+    if (cw) { while (sweep > 0) sweep -= 2 * Math.PI; }
+    else    { while (sweep < 0) sweep += 2 * Math.PI; }
+    if (Math.abs(sweep) <= Math.PI + 1e-6) {
+      return { cz: c.cz, cr: c.cr, R, a0, a1, cw };
+    }
+  }
+  // フォールバック（劣弧が見つからなければ最初の候補）
+  const c = cands[0];
+  const a0 = Math.atan2(r0 - c.cr, z0 - c.cz);
+  const a1 = Math.atan2(r1 - c.cr, z1 - c.cz);
+  return { cz: c.cz, cr: c.cr, R, a0, a1, cw };
+}
+
+function draw() {
+  const d = state.data;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const css = getComputedStyle(document.documentElement);
+  const colGrid = css.getPropertyValue("--grid").trim();
+  const colAxis = css.getPropertyValue("--axis").trim();
+  const colCenter = css.getPropertyValue("--center").trim();
+  const colRapid = css.getPropertyValue("--rapid").trim();
+  const colMuted = css.getPropertyValue("--muted").trim();
+
+  ctx.clearRect(0, 0, w, h);
+  if (!d) return;
+
+  const showRapid = document.getElementById("showRapid").checked;
+  const showLabels = document.getElementById("showLabels").checked;
+  const flip = document.getElementById("flipArc").checked;
+  const showDir = document.getElementById("showDir").checked;
+
+  // --- グリッド + 目盛 ---
+  drawGrid(w, h, colGrid, colAxis, colMuted, showLabels);
+
+  // --- 中心線 (r=0) ---
+  ctx.save();
+  ctx.strokeStyle = colCenter;
+  ctx.setLineDash([8, 4, 2, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, wy(0));
+  ctx.lineTo(w, wy(0));
+  ctx.stroke();
+  ctx.restore();
+
+  // 再生位置
+  const play = playAt(state.playhead);
+  const playActive = state.playhead < 1;
+
+  // --- 原位置マーカー ---
+  for (const t of d.tools) {
+    const o = origins[t];
+    if (!o || !isFinite(o.x) || !isFinite(o.z)) continue;
+    ctx.save();
+    ctx.strokeStyle = toolColor(t);
+    ctx.fillStyle = toolColor(t);
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([]);
+    for (const sign of [1, -1]) {
+      const px = wx(o.z), py = wy(sign * o.x / 2), rr = 6;
+      ctx.beginPath(); ctx.arc(px, py, rr, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px - rr - 3, py); ctx.lineTo(px + rr + 3, py);
+      ctx.moveTo(px, py - rr - 3); ctx.lineTo(px, py + rr + 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // --- セグメント（上下ミラー） ---
+  for (let i = 0; i < d.segs.length; i++) {
+    const s = d.segs[i];
+    if (playActive && i > play.idx) continue; // 再生位置より先は未描画
+    const partial = playActive && i === play.idx;
+    const isRapid = s.type === 0;
+    if (isRapid && !showRapid) continue;
+    const hovered = state.hoverSeg === s;
+    const col = isRapid ? colRapid : toolColor(s.tool);
+    ctx.save();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = hovered ? 3.5 : (isRapid ? 1 : 1.8);
+    ctx.globalAlpha = isRapid ? 0.75 : 1;
+    ctx.setLineDash(isRapid ? [5, 4] : []);
+    for (const sign of [1, -1]) {
+      if (partial) {
+        drawSegPartial(s, play.t, sign);
+      } else if (s.type === 2 || s.type === 3) {
+        const ap = arcParams(s, flip);
+        if (ap) { drawArcPolyline(ap, sign); }
+        else {
+          ctx.beginPath();
+          ctx.moveTo(wx(s.z0), wy(sign * s.x0 / 2));
+          ctx.lineTo(wx(s.z1), wy(sign * s.x1 / 2));
+          ctx.stroke();
+        }
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(wx(s.z0), wy(sign * s.x0 / 2));
+        ctx.lineTo(wx(s.z1), wy(sign * s.x1 / 2));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // 方向矢印（セグメント中点、部分描画中はスキップ）
+    if (showDir && !partial) {
+      const mid = segPointAt(s, 0.5);
+      for (const sign of [1, -1]) {
+        const px = wx(mid.z), py = wy(sign * mid.r);
+        drawArrowHead(px, py, worldAngToScreen(mid.ang, sign), col, 6);
+      }
+    }
+  }
+
+  // --- 再生先端マーカー ---
+  if (playActive && play.idx >= 0) {
+    const s = d.segs[play.idx];
+    const p = segPointAt(s, play.t);
+    ctx.save();
+    for (const sign of [1, -1]) {
+      const px = wx(p.z), py = wy(sign * p.r);
+      ctx.beginPath();
+      ctx.fillStyle = toolColor(s.tool);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      drawArrowHead(px, py, worldAngToScreen(p.ang, sign), toolColor(s.tool), 9);
+    }
+    ctx.restore();
+  }
+
+  // ホバー点の強調
+  if (state.hoverSeg) {
+    const s = state.hoverSeg;
+    ctx.save();
+    ctx.fillStyle = toolColor(s.tool);
+    for (const sign of [1, -1]) {
+      for (const p of [[s.z0, s.x0], [s.z1, s.x1]]) {
+        ctx.beginPath();
+        ctx.arc(wx(p[0]), wy(sign * p[1] / 2), 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// 円弧を点列で描画（現在のctxパス設定を使用）
+function drawArcPolyline(ap, sign) {
+  const N = 48;
+  let sweep = ap.a1 - ap.a0;
+  if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; }
+  else       { while (sweep < 0) sweep += 2 * Math.PI; }
+  ctx.beginPath();
+  for (let k = 0; k <= N; k++) {
+    const a = ap.a0 + sweep * (k / N);
+    const zz = ap.cz + ap.R * Math.cos(a);
+    const rr = ap.cr + ap.R * Math.sin(a);
+    const px = wx(zz), py = wy(sign * rr);
+    if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+}
+
+// playhead(0..1) → { idx, t }（idx=セグメント番号, t=そのセグメント内の割合0..1）
+function playAt(p) {
+  const d = state.data;
+  if (!d || !d.segs.length) return { idx: -1, t: 0 };
+  const target = p * d.totalT;
+  if (p >= 1) return { idx: d.segs.length - 1, t: 1 };
+  if (p <= 0) return { idx: 0, t: 0 };
+  // cumT は長さ segs+1
+  for (let i = 0; i < d.segs.length; i++) {
+    if (target < d.cumT[i + 1] || i === d.segs.length - 1) {
+      const local = (target - d.cumT[i]) / (d.cumT[i + 1] - d.cumT[i]);
+      return { idx: i, t: Math.max(0, Math.min(1, local)) };
+    }
+  }
+  return { idx: d.segs.length - 1, t: 1 };
+}
+
+// セグメント上の点（ワールド (z, r)）。r は上半分（r=x/2）。t=0..1
+function segPointAt(s, t) {
+  if (s.type === 2 || s.type === 3) {
+    const ap = arcParams(s, document.getElementById("flipArc").checked);
+    if (ap) {
+      let sweep = ap.a1 - ap.a0;
+      if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; } else { while (sweep < 0) sweep += 2 * Math.PI; }
+      const a = ap.a0 + sweep * t;
+      return { z: ap.cz + ap.R * Math.cos(a), r: ap.cr + ap.R * Math.sin(a),
+               ang: a + (ap.cw ? -Math.PI / 2 : Math.PI / 2) }; // 接線方向（進行）
+    }
+  }
+  const z = s.z0 + (s.z1 - s.z0) * t;
+  const r = (s.x0 + (s.x1 - s.x0) * t) / 2;
+  const ang = Math.atan2((s.x1 - s.x0) / 2, s.z1 - s.z0);
+  return { z, r, ang };
+}
+
+// セグメントを t=0..upto まで描画（現在の ctx 設定を使用、上下ミラー sign）
+function drawSegPartial(s, upto, sign) {
+  ctx.beginPath();
+  if (s.type === 2 || s.type === 3) {
+    const ap = arcParams(s, document.getElementById("flipArc").checked);
+    if (ap) {
+      let sweep = ap.a1 - ap.a0;
+      if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; } else { while (sweep < 0) sweep += 2 * Math.PI; }
+      const N = Math.max(2, Math.ceil(48 * upto));
+      for (let k = 0; k <= N; k++) {
+        const a = ap.a0 + sweep * upto * (k / N);
+        const px = wx(ap.cz + ap.R * Math.cos(a)), py = wy(sign * (ap.cr + ap.R * Math.sin(a)));
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      return;
+    }
+  }
+  const z = s.z0 + (s.z1 - s.z0) * upto;
+  const r1 = (s.x0 + (s.x1 - s.x0) * upto) / 2;
+  ctx.moveTo(wx(s.z0), wy(sign * s.x0 / 2));
+  ctx.lineTo(wx(z), wy(sign * r1));
+  ctx.stroke();
+}
+
+// 進行方向の矢印ヘッドをスクリーン(px,py)に角度angで描画（ワールド角→スクリーン角に変換済みを渡す）
+function drawArrowHead(px, py, screenAng, color, size) {
+  size = size || 7;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+  ctx.translate(px, py);
+  ctx.rotate(screenAng);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-size, -size * 0.5);
+  ctx.lineTo(-size, size * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// ワールドの進行角(ang: +z右, +r上) を、上下ミラー sign のスクリーン角へ変換
+function worldAngToScreen(ang, sign) {
+  // スクリーン: x=+z方向そのまま, y=-（sign*r）方向。dz=cos(ang), dr=sin(ang)
+  const dz = Math.cos(ang), dr = Math.sin(ang);
+  return Math.atan2(-sign * dr, dz);
+}
+
+function niceStep(rawStep) {
+  const pow = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const n = rawStep / pow;
+  let f;
+  if (n < 1.5) f = 1; else if (n < 3) f = 2; else if (n < 7) f = 5; else f = 10;
+  return f * pow;
+}
+
+function drawGrid(w, h, colGrid, colAxis, colMuted, showLabels) {
+  const targetPx = 80;
+  const step = niceStep(targetPx / state.scale);
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.fillStyle = colMuted;
+
+  // 縦線（Z一定）
+  const zLeft = sxToZ(0), zRight = sxToZ(w);
+  const z0 = Math.ceil(zLeft / step) * step;
+  for (let z = z0; z <= zRight; z += step) {
+    const px = wx(z);
+    ctx.strokeStyle = colGrid;
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+    if (showLabels) {
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillText("Z" + fmt(z), px, h - 2);
+    }
+  }
+  // 横線（r一定 → 直径ラベル）
+  const rTop = syToR(0), rBot = syToR(h);
+  const r0 = Math.ceil(rBot / step) * step;
+  for (let r = r0; r <= rTop; r += step) {
+    const py = wy(r);
+    ctx.strokeStyle = colGrid;
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
+    if (showLabels && Math.abs(r) > 1e-9) {
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText("⌀" + fmt(Math.abs(r) * 2), 3, py); // 直径表示
+    }
+  }
+  ctx.restore();
+}
+
+function fmt(v) {
+  const r = Math.round(v * 1000) / 1000;
+  return (Math.abs(r) < 1e-9 ? 0 : r).toString();
+}
+
+// ===== インタラクション =====
+function hitTest(px, py) {
+  const d = state.data;
+  if (!d) return null;
+  const showRapid = document.getElementById("showRapid").checked;
+  let best = null, bestDist = 7; // px 閾値
+  for (const s of d.segs) {
+    if (s.type === 0 && !showRapid) continue;
+    for (const sign of [1, -1]) {
+      // 直線近似（円弧も端点間の折れ線サンプルで近似）
+      let pts;
+      if (s.type === 2 || s.type === 3) {
+        const ap = arcParams(s, document.getElementById("flipArc").checked);
+        pts = [];
+        if (ap) {
+          let sweep = ap.a1 - ap.a0;
+          if (ap.cw) { while (sweep > 0) sweep -= 2*Math.PI; } else { while (sweep < 0) sweep += 2*Math.PI; }
+          for (let k = 0; k <= 16; k++) {
+            const a = ap.a0 + sweep * (k/16);
+            pts.push([wx(ap.cz + ap.R*Math.cos(a)), wy(sign*(ap.cr + ap.R*Math.sin(a)))]);
+          }
+        } else {
+          pts = [[wx(s.z0), wy(sign*s.x0/2)], [wx(s.z1), wy(sign*s.x1/2)]];
+        }
+      } else {
+        pts = [[wx(s.z0), wy(sign*s.x0/2)], [wx(s.z1), wy(sign*s.x1/2)]];
+      }
+      for (let k = 0; k < pts.length - 1; k++) {
+        const dist = distToSeg(px, py, pts[k][0], pts[k][1], pts[k+1][0], pts[k+1][1]);
+        if (dist < bestDist) { bestDist = dist; best = s; }
+      }
+    }
+  }
+  return best;
+}
+
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx*dx + dy*dy;
+  let t = len2 ? ((px-x1)*dx + (py-y1)*dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + t*dx, cy = y1 + t*dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+const G_NAME = { 0: "G0 早送り", 1: "G1 切削", 2: "G2 円弧(CW)", 3: "G3 円弧(CCW)" };
+
+function showTooltip(s, clientX, clientY) {
+  const rect = wrap.getBoundingClientRect();
+  tooltip.style.display = "block";
+  tooltip.innerHTML =
+    `<b>${G_NAME[s.type] || "G"+s.type}</b> ・ 工具 T${s.tool} ・ 行 ${s.line}<br>` +
+    `始: ⌀${fmt(s.x0)} Z${fmt(s.z0)}<br>` +
+    `終: ⌀${fmt(s.x1)} Z${fmt(s.z1)}` +
+    (s.r != null ? `<br>R${fmt(s.r)}` : "");
+  let tx = clientX - rect.left + 14, ty = clientY - rect.top + 14;
+  if (tx + tooltip.offsetWidth > rect.width) tx = clientX - rect.left - tooltip.offsetWidth - 14;
+  if (ty + tooltip.offsetHeight > rect.height) ty = clientY - rect.top - tooltip.offsetHeight - 14;
+  tooltip.style.left = tx + "px";
+  tooltip.style.top = ty + "px";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+
+// ドラッグ（パン）
+let dragging = false, lastX = 0, lastY = 0, moved = false;
+cv.addEventListener("mousedown", e => { dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY; });
+window.addEventListener("mouseup", () => { dragging = false; });
+cv.addEventListener("mousemove", e => {
+  if (dragging) {
+    state.offsetX += e.clientX - lastX;
+    state.offsetY += e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY; moved = true;
+    draw();
+    return;
+  }
+  const rect = cv.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const hit = hitTest(px, py);
+  if (hit !== state.hoverSeg) {
+    state.hoverSeg = hit;
+    draw();
+    highlightSrc(hit ? hit.line : null);
+  }
+  if (hit) showTooltip(hit, e.clientX, e.clientY); else hideTooltip();
+});
+cv.addEventListener("mouseleave", () => { state.hoverSeg = null; hideTooltip(); highlightSrc(null); draw(); });
+
+// ホイールズーム（カーソル中心）
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const rect = cv.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const worldZ = sxToZ(px), worldR = syToR(py);
+  const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+  state.scale *= factor;
+  // カーソル位置のワールド点を固定
+  state.offsetX = px - worldZ * state.scale;
+  state.offsetY = py + worldR * state.scale;
+  draw();
+}, { passive: false });
+
+// ===== ソース一覧 =====
+function renderSrc() {
+  const el = document.getElementById("src");
+  el.innerHTML = "";
+  const lines = state.data.rawLines;
+  for (let i = 0; i < lines.length; i++) {
+    const div = document.createElement("div");
+    div.className = "ln";
+    div.dataset.line = i + 1;
+    div.innerHTML = `<span class="num">${i+1}</span><span class="code"></span>`;
+    div.querySelector(".code").textContent = lines[i];
+    div.addEventListener("mouseenter", () => {
+      const ln = i + 1;
+      const seg = state.data.segs.find(s => s.line === ln);
+      state.hoverSeg = seg || null;
+      draw();
+    });
+    div.addEventListener("mouseleave", () => { state.hoverSeg = null; draw(); });
+    el.appendChild(div);
+  }
+}
+function highlightSrc(lineNo) {
+  const el = document.getElementById("src");
+  const prev = el.querySelector(".ln.hl");
+  if (prev) prev.classList.remove("hl");
+  if (lineNo != null) {
+    const t = el.querySelector(`.ln[data-line="${lineNo}"]`);
+    if (t) { t.classList.add("hl"); t.scrollIntoView({ block: "nearest" }); }
+  }
+}
+
+// ===== 凡例 =====
+function renderLegend() {
+  const el = document.getElementById("legend");
+  let html = `<div class="row"><span class="swatch dash"></span>G0 早送り</div>`;
+  html += `<div class="row"><span class="swatch" style="background:#666;height:2px"></span>G1/G2/G3 切削（色=工具）</div>`;
+  html += `<div class="row" style="color:var(--muted);font-size:11px;margin-top:6px">工具ごとの原位置（空欄=指定なし）</div>`;
+  for (const t of state.data.tools) {
+    const o = origins[t] || {};
+    const xv = isFinite(o.x) ? o.x : "";
+    const zv = isFinite(o.z) ? o.z : "";
+    html += `<div class="row orow"><span class="swatch" style="background:${toolColor(t)}"></span>T${t}` +
+      `<span class="oin">⌀<input type="number" step="any" data-otool="${t}" data-axis="x" value="${xv}" placeholder="X直径"></span>` +
+      `<span class="oin">Z<input type="number" step="any" data-otool="${t}" data-axis="z" value="${zv}" placeholder="Z"></span></div>`;
+  }
+  el.innerHTML = html;
+  el.querySelectorAll("input[data-otool]").forEach(inp => {
+    inp.addEventListener("change", onOriginChange);
+  });
+}
+
+function onOriginChange(e) {
+  const t = parseInt(e.target.dataset.otool, 10);
+  const axis = e.target.dataset.axis;
+  const v = e.target.value.trim();
+  if (!origins[t]) origins[t] = {};
+  origins[t][axis] = v === "" ? NaN : parseFloat(v);
+  // 両軸が揃っていなければ原位置は無効
+  reparse();
+  draw();
+}
+
+// ===== ロード =====
+let lastText = "";
+function load(text, name) {
+  lastText = text;
+  origins = {};                 // 新規ファイルでは原位置をクリア
+  state.data = parseNc(text, origins);
+  state.fileName = name;
+  state.playhead = 1; state.playing = false;
+  document.getElementById("fileName").textContent = name;
+  document.getElementById("segCount").textContent = state.data.segs.length + " seg";
+  renderSrc();
+  renderLegend();
+  fitView();
+  syncTransport();
+  draw();
+  document.getElementById("emptyHint").style.display = "none";
+}
+
+// 原位置変更などでビューを保持したまま再パース
+function reparse() {
+  state.data = parseNc(lastText, origins);
+  document.getElementById("segCount").textContent = state.data.segs.length + " seg";
+  renderSrc();
+  syncTransport();
+}
+
+// ===== 再生 =====
+let lastHlLine = null;
+function setPlayhead(p, seekPause) {
+  if (!state.data) return;
+  state.playhead = Math.max(0, Math.min(1, p));
+  if (seekPause) state.playing = false;
+  syncTransport();
+  const pl = playAt(state.playhead);
+  const ln = (state.playhead < 1 && pl.idx >= 0) ? state.data.segs[pl.idx].line : null;
+  if (ln !== lastHlLine) { highlightSrc(ln); lastHlLine = ln; }
+  draw();
+}
+
+function syncTransport() {
+  if (!state.data) return;
+  const seek = document.getElementById("seek");
+  seek.value = Math.round(state.playhead * 1000);
+  document.getElementById("btnPlay").textContent = state.playing ? "⏸" : "▶";
+  const info = document.getElementById("playInfo");
+  if (state.playhead >= 1 && !state.playing) {
+    info.textContent = "全表示";
+  } else {
+    const pl = playAt(state.playhead);
+    const s = state.data.segs[pl.idx];
+    info.textContent = s ? `${pl.idx + 1}/${state.data.segs.length}  行${s.line}` : "";
+  }
+}
+
+let rafId = null, lastTs = 0;
+function tick(ts) {
+  if (!state.playing || !state.data) { rafId = null; return; }
+  if (!lastTs) lastTs = ts;
+  const dt = (ts - lastTs) / 1000; lastTs = ts;
+  // totalT はワールド長/速度の合計。再生時間 = totalT / (BASE*speed) 秒程度
+  const BASE = 40; // 全体の速さ基準
+  state.playhead += dt * BASE * state.speed / state.data.totalT;
+  if (state.playhead >= 1) {
+    state.playhead = 1; state.playing = false;
+    syncTransport(); draw(); rafId = null; return;
+  }
+  setPlayhead(state.playhead, false);
+  rafId = requestAnimationFrame(tick);
+}
+function play() {
+  if (!state.data || !state.data.segs.length) return;
+  if (state.playhead >= 1) state.playhead = 0; // 末尾なら先頭から
+  state.playing = true; lastTs = 0;
+  syncTransport();
+  if (!rafId) rafId = requestAnimationFrame(tick);
+}
+function pause() { state.playing = false; syncTransport(); }
+function stepSeg(dir) {
+  if (!state.data || !state.data.segs.length) return;
+  const pl = playAt(state.playhead >= 1 ? 1 : state.playhead);
+  let idx = pl.idx + (dir > 0 ? 1 : (pl.t > 0.001 ? 0 : -1));
+  idx = Math.max(0, Math.min(state.data.segs.length - 1, idx));
+  // セグメント idx の終端(dir>0) or 始端 に合わせる
+  const target = dir > 0 ? state.data.cumT[idx + 1] : state.data.cumT[idx];
+  setPlayhead(target / state.data.totalT, true);
+}
+
+// UI配線
+document.getElementById("loadBtn").addEventListener("click", () => document.getElementById("fileInput").click());
+document.getElementById("fileInput").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => load(rd.result, f.name);
+  rd.readAsText(f);
+});
+document.getElementById("resetView").addEventListener("click", () => { fitView(); draw(); });
+for (const id of ["showRapid", "showLabels", "flipArc", "showDir"]) {
+  document.getElementById(id).addEventListener("change", draw);
+}
+
+// トランスポート配線
+document.getElementById("btnPlay").addEventListener("click", () => { state.playing ? pause() : play(); });
+document.getElementById("btnRewind").addEventListener("click", () => setPlayhead(0, true));
+document.getElementById("btnStepFwd").addEventListener("click", () => stepSeg(1));
+document.getElementById("btnStepBack").addEventListener("click", () => stepSeg(-1));
+document.getElementById("seek").addEventListener("input", e => setPlayhead(e.target.value / 1000, true));
+document.getElementById("speed").addEventListener("input", e => { state.speed = parseFloat(e.target.value); });
+
+// ドラッグ&ドロップ
+const dropHint = document.getElementById("dropHint");
+["dragenter","dragover"].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); dropHint.style.display = "flex"; }));
+["dragleave","drop"].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); if (ev !== "drop" && e.target !== wrap && wrap.contains(e.relatedTarget)) return; dropHint.style.display = "none"; }));
+wrap.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => load(rd.result, f.name);
+  rd.readAsText(f);
+});
+
+window.addEventListener("resize", resizeCanvas);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+
+// 初期化（サンプルは埋め込まない：ファイルを読み込むまで空表示）
+resizeCanvas();
+</script>
+</body>
+</html>
