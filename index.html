@@ -733,14 +733,25 @@ function distToSeg(px, py, x1, y1, x2, y2) {
 
 const G_NAME = { 0: "G0 早送り", 1: "G1 切削", 2: "G2 円弧(CW)", 3: "G3 円弧(CCW)" };
 
+// G1テーパ線の水平(Z軸)からの角度（半径基準・鋭角0〜90°）。テーパでなければ null
+function taperAngle(s) {
+  if (s.type !== 1) return null;
+  const dr = (s.x1 - s.x0) / 2, dz = s.z1 - s.z0;
+  const ang = Math.atan2(Math.abs(dr), Math.abs(dz)) * 180 / Math.PI;
+  if (ang <= 0.5 || ang >= 89.5) return null; // 端面(≈0°)・外径(≈90°)は除外
+  return ang;
+}
+
 function showTooltip(s, clientX, clientY) {
   const rect = wrap.getBoundingClientRect();
   tooltip.style.display = "block";
+  const ang = taperAngle(s);
   tooltip.innerHTML =
     `<b>${G_NAME[s.type] || "G"+s.type}</b> ・ 工具 T${s.tool} ・ 行 ${s.line}<br>` +
     `始: ⌀${fmt(s.x0)} Z${fmt(s.z0)}<br>` +
     `終: ⌀${fmt(s.x1)} Z${fmt(s.z1)}` +
-    (s.r != null ? `<br>R${fmt(s.r)}` : "");
+    (s.r != null ? `<br>R${fmt(s.r)}` : "") +
+    (ang != null ? `<br>水平から ∠${ang.toFixed(2)}°` : "");
   let tx = clientX - rect.left + 14, ty = clientY - rect.top + 14;
   if (tx + tooltip.offsetWidth > rect.width) tx = clientX - rect.left - tooltip.offsetWidth - 14;
   if (ty + tooltip.offsetHeight > rect.height) ty = clientY - rect.top - tooltip.offsetHeight - 14;
