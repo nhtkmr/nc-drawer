@@ -123,7 +123,9 @@
     <label><input type="checkbox" id="showLabels" checked> ラベル</label>
     <label><input type="checkbox" id="showDir"> 方向</label>
     <label><input type="checkbox" id="flipArc"> 円弧向き反転</label>
-    <span class="hint">ホイール=ズーム / ドラッグ=移動</span>
+    <label><input type="checkbox" id="ixMode"> 交点測定</label>
+    <button id="ixClear">交点クリア</button>
+    <span class="hint" id="ixHint">ホイール=ズーム / ドラッグ=移動</span>
   </div>
 </header>
 <div class="transport">
@@ -312,6 +314,9 @@ let state = {
   playing: false,
   playhead: 1,   // 0..1（全体進捗）。1=全表示
   speed: 1,      // 再生速度倍率
+  // 交点測定
+  ixFirst: null,      // 選択中の1本目セグメント
+  ixPoints: [],       // {z, r, a, b} 理論交点
 };
 
 const cv = document.getElementById("cv");
@@ -534,6 +539,82 @@ function draw() {
     }
     ctx.restore();
   }
+
+  // --- 交点測定 ---
+  drawIntersections(colMuted);
+}
+
+// 交点測定の描画：選択中の1本目ハイライト＋確定した交点の延長線・マーカー・座標
+function drawIntersections(colMuted) {
+  // 選択中の1本目を強調
+  if (state.ixFirst) {
+    const s = state.ixFirst;
+    ctx.save();
+    ctx.strokeStyle = "#e11d48";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    for (const sign of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(wx(s.z0), wy(sign * s.x0 / 2));
+      ctx.lineTo(wx(s.z1), wy(sign * s.x1 / 2));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  for (const ip of state.ixPoints) {
+    // 元2線から交点までの延長線（点線・淡色）
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.6;
+    for (const seg of [ip.a, ip.b]) {
+      ctx.strokeStyle = toolColor(seg.tool);
+      // 交点に近い端点から交点へ
+      const r0 = seg.x0 / 2, r1 = seg.x1 / 2;
+      const d0 = Math.hypot(seg.z0 - ip.z, r0 - ip.r);
+      const d1 = Math.hypot(seg.z1 - ip.z, r1 - ip.r);
+      const near = d0 < d1 ? { z: seg.z0, r: r0 } : { z: seg.z1, r: r1 };
+      for (const sign of [1, -1]) {
+        ctx.beginPath();
+        ctx.moveTo(wx(near.z), wy(sign * near.r));
+        ctx.lineTo(wx(ip.z), wy(sign * ip.r));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // ×マーカー（上下）＋座標ラベル（上半分のみ）
+    ctx.save();
+    ctx.strokeStyle = "#e11d48";
+    ctx.fillStyle = "#e11d48";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    for (const sign of [1, -1]) {
+      const px = wx(ip.z), py = wy(sign * ip.r), m = 5;
+      ctx.beginPath();
+      ctx.moveTo(px - m, py - m); ctx.lineTo(px + m, py + m);
+      ctx.moveTo(px - m, py + m); ctx.lineTo(px + m, py - m);
+      ctx.stroke();
+    }
+    // ラベル
+    const label = `⌀${fmt(ip.r * 2)} Z${fmt(ip.z)}`;
+    const lx = wx(ip.z) + 9, ly = wy(ip.r) - 9;
+    ctx.font = "12px system-ui, sans-serif";
+    const tw = ctx.measureText(label).width;
+    const css = getComputedStyle(document.documentElement);
+    ctx.fillStyle = css.getPropertyValue("--panel").trim();
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(lx - 3, ly - 13, tw + 6, 17);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#e11d48";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(lx - 3, ly - 13, tw + 6, 17);
+    ctx.fillStyle = css.getPropertyValue("--text").trim();
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(label, lx, ly);
+    ctx.restore();
+  }
 }
 
 // 円弧を点列で描画（現在のctxパス設定を使用）
@@ -731,6 +812,31 @@ function distToSeg(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - cx, py - cy);
 }
 
+// G1(直線切削)のみを対象に最近傍セグメントを返す（交点測定用）
+function pickG1(px, py) {
+  const d = state.data;
+  if (!d) return null;
+  let best = null, bestDist = 8;
+  for (const s of d.segs) {
+    if (s.type !== 1) continue;
+    for (const sign of [1, -1]) {
+      const dist = distToSeg(px, py, wx(s.z0), wy(sign*s.x0/2), wx(s.z1), wy(sign*s.x1/2));
+      if (dist < bestDist) { bestDist = dist; best = s; }
+    }
+  }
+  return best;
+}
+
+// 2本のG1セグメントを無限直線とみなした交点（ワールド (z, r), r=x/2）。平行なら null
+function lineIntersect(a, b) {
+  const pa = { z: a.z0, r: a.x0/2 }, da = { z: a.z1 - a.z0, r: (a.x1 - a.x0)/2 };
+  const pb = { z: b.z0, r: b.x0/2 }, db = { z: b.z1 - b.z0, r: (b.x1 - b.x0)/2 };
+  const den = da.z * db.r - da.r * db.z;
+  if (Math.abs(den) < 1e-9) return null; // 平行
+  const t = ((pb.z - pa.z) * db.r - (pb.r - pa.r) * db.z) / den;
+  return { z: pa.z + t * da.z, r: pa.r + t * da.r };
+}
+
 const G_NAME = { 0: "G0 早送り", 1: "G1 切削", 2: "G2 円弧(CW)", 3: "G3 円弧(CCW)" };
 
 // G1テーパ線の水平(Z軸)からの角度（半径基準・鋭角0〜90°）。テーパでなければ null
@@ -783,6 +889,38 @@ cv.addEventListener("mousemove", e => {
   if (hit) showTooltip(hit, e.clientX, e.clientY); else hideTooltip();
 });
 cv.addEventListener("mouseleave", () => { state.hoverSeg = null; hideTooltip(); highlightSrc(null); draw(); });
+
+// 交点測定：クリックでG1線を2本選択
+function ixModeOn() { return document.getElementById("ixMode").checked; }
+function setIxHint(msg) { document.getElementById("ixHint").textContent = msg; }
+function updateIxHint() {
+  if (!ixModeOn()) { setIxHint("ホイール=ズーム / ドラッグ=移動"); return; }
+  setIxHint(state.ixFirst ? "2本目のG1線をクリック" : "1本目のG1線をクリック");
+}
+cv.addEventListener("click", e => {
+  if (moved || !ixModeOn() || !state.data) return; // ドラッグは無視
+  const rect = cv.getBoundingClientRect();
+  const seg = pickG1(e.clientX - rect.left, e.clientY - rect.top);
+  if (!seg) { setIxHint("G1線が見つかりません（線の近くをクリック）"); return; }
+  if (!state.ixFirst) {
+    state.ixFirst = seg;
+    updateIxHint();
+  } else if (seg === state.ixFirst) {
+    setIxHint("別のG1線を選んでください");
+  } else {
+    const ip = lineIntersect(state.ixFirst, seg);
+    if (!ip) { setIxHint("平行な2線は交点なし"); state.ixFirst = null; }
+    else {
+      state.ixPoints.push({ z: ip.z, r: ip.r, a: state.ixFirst, b: seg });
+      state.ixFirst = null;
+      setIxHint(`交点: ⌀${fmt(ip.r * 2)} Z${fmt(ip.z)}`);
+    }
+  }
+  draw();
+});
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape") { state.ixFirst = null; state.ixPoints = []; updateIxHint(); draw(); }
+});
 
 // ホイールズーム（カーソル中心）
 cv.addEventListener("wheel", e => {
@@ -868,6 +1006,7 @@ function load(text, name) {
   state.data = parseNc(text, origins);
   state.fileName = name;
   state.playhead = 1; state.playing = false;
+  state.ixFirst = null; state.ixPoints = [];  // 交点測定をクリア
   document.getElementById("fileName").textContent = name;
   document.getElementById("segCount").textContent = state.data.segs.length + " seg";
   renderSrc();
@@ -960,6 +1099,17 @@ document.getElementById("resetView").addEventListener("click", () => { fitView()
 for (const id of ["showRapid", "showLabels", "flipArc", "showDir"]) {
   document.getElementById(id).addEventListener("change", draw);
 }
+
+// 交点測定 配線
+document.getElementById("ixMode").addEventListener("change", () => {
+  cv.style.cursor = ixModeOn() ? "pointer" : "crosshair";
+  if (!ixModeOn()) state.ixFirst = null;
+  updateIxHint();
+  draw();
+});
+document.getElementById("ixClear").addEventListener("click", () => {
+  state.ixFirst = null; state.ixPoints = []; updateIxHint(); draw();
+});
 
 // トランスポート配線
 document.getElementById("btnPlay").addEventListener("click", () => { state.playing ? pause() : play(); });
