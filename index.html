@@ -17,6 +17,7 @@
     --center: #b06060;
     --hl: #fff3b0;
     --rapid: #9aa1ab;
+    --accent: #e11d48;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -31,6 +32,7 @@
       --center: #c07a7a;
       --hl: #4a4320;
       --rapid: #667085;
+      --accent: #f43f5e;
     }
   }
   * { box-sizing: border-box; }
@@ -87,9 +89,10 @@
   }
   .side-head { padding: 6px 10px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
   .src { flex: 1; overflow: auto; font-family: "Consolas","Courier New",monospace; font-size: 12px; }
-  .src .ln { display: flex; padding: 0 8px; white-space: pre; }
+  .src .ln { display: flex; padding: 0 8px; white-space: pre; border-left: 3px solid transparent; cursor: pointer; }
   .src .ln:hover { background: var(--grid); }
   .src .ln.hl { background: var(--hl); }
+  .src .ln.sel { border-left-color: var(--accent); }
   .src .num { color: var(--muted); width: 34px; text-align: right; margin-right: 10px; user-select: none; flex: none; }
   .legend { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px; }
   .legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
@@ -97,6 +100,27 @@
   .legend .orow .oin { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-size: 11px; }
   .legend .orow input { width: 54px; font: inherit; font-size: 11px; padding: 1px 3px;
     background: var(--canvas-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+  .assist { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px; }
+  .assist.on { border-top: 2px solid var(--accent); }
+  .assist .ahead { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 5px; }
+  .assist .ahead .g { color: var(--accent); }
+  .assist .arow { display: flex; align-items: center; gap: 5px; margin: 4px 0; }
+  .assist .lab { color: var(--muted); width: 46px; flex: none; }
+  .assist input[type=number] { width: 76px; font: inherit; font-size: 12px; padding: 1px 4px;
+    background: var(--canvas-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+  .assist input[readonly] { background: var(--grid); color: var(--muted); border-style: dashed; }
+  .assist .auto { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; cursor: pointer; }
+  .assist .auto input { margin: 0; }
+  .assist .fixed { color: var(--muted); font-size: 11px; }
+  .assist .tag { color: var(--muted); font-size: 10px; border: 1px dashed var(--border); border-radius: 3px; padding: 0 3px; }
+  .assist button.pin { font-size: 10px; padding: 1px 5px; }
+  .assist .note { color: var(--muted); font-size: 11px; margin: 3px 0; line-height: 1.4; }
+  .assist .err { color: var(--accent); font-size: 11px; margin: 3px 0; line-height: 1.4; }
+  .assist .btns { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .assist button { font-size: 12px; padding: 3px 9px; }
+  .assist button:disabled { opacity: .45; cursor: default; }
+  .assist button.pri { border-color: var(--accent); color: var(--accent); }
+  .assist button.pri:disabled { border-color: var(--border); color: var(--text); }
   .swatch { width: 22px; height: 3px; border-radius: 2px; flex: none; }
   .dash { background: repeating-linear-gradient(90deg, var(--rapid) 0 4px, transparent 4px 7px); height: 0; border-top: 2px dashed var(--rapid); }
   .hint { color: var(--muted); font-size: 11px; }
@@ -118,12 +142,14 @@
   <div class="controls">
     <button id="loadBtn">ファイルを開く</button>
     <input type="file" id="fileInput" accept=".nc,.txt,.tap,.cnc,.min,*" style="display:none">
+    <button id="saveBtn">ファイルを保存</button>
     <button id="resetView">ビューリセット</button>
     <label><input type="checkbox" id="showRapid" checked> 早送り(G0)</label>
     <label><input type="checkbox" id="showLabels" checked> ラベル</label>
     <label><input type="checkbox" id="showDir"> 方向</label>
     <label><input type="checkbox" id="flipArc"> 円弧向き反転</label>
     <label><input type="checkbox" id="ixMode"> 交点測定</label>
+    <label><input type="checkbox" id="editMode"> 座標アシスト</label>
     <button id="ixClear">交点クリア</button>
     <span class="hint" id="ixHint">ホイール=ズーム / ドラッグ=移動</span>
   </div>
@@ -150,6 +176,7 @@
   <div class="side">
     <div class="side-head"><span id="fileName">（未読み込み）</span><span class="hint" id="segCount"></span></div>
     <div class="src" id="src"></div>
+    <div class="assist" id="assist"></div>
     <div class="legend" id="legend"></div>
   </div>
 </div>
@@ -317,7 +344,16 @@ let state = {
   // 交点測定
   ixFirst: null,      // 選択中の1本目セグメント
   ixPoints: [],       // {z, r, a, b} 理論交点
+  // 座標アシスト
+  editLine: null,     // 選択中セグメントの行番号（reparseを跨いで生き残る識別子）
+  edit: null,         // { x1, z1, ang, r, auto:"x1"|"z1"|"ang", err }
 };
+
+// 座標アシストの編集履歴（プログラムは小さいので全文スナップショットで十分）
+let undoStack = [];
+let savedText = "";  // 最後に読み込み/保存した時点のテキスト
+let dirty = false;   // 未保存の編集あり
+let eol = "\n";      // 元ファイルの改行コード
 
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
@@ -542,6 +578,93 @@ function draw() {
 
   // --- 交点測定 ---
   drawIntersections(colMuted);
+
+  // --- 座標アシスト ---
+  drawEditPreview();
+}
+
+// 座標アシスト：選択セグメントの強調と、保留中の編集値のゴースト線
+function drawEditPreview() {
+  const seg = editSeg();
+  if (!seg) return;
+  const css = getComputedStyle(document.documentElement);
+  const acc = css.getPropertyValue("--accent").trim();
+
+  // 選択中セグメントを太線で強調
+  ctx.save();
+  ctx.strokeStyle = acc;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.55;
+  for (const sign of [1, -1]) {
+    if (isArcSeg(seg)) {
+      const ap = arcParams(seg, document.getElementById("flipArc").checked);
+      if (ap) { drawArcPolyline(ap, sign); continue; }   // 内部で stroke 済み
+    }
+    ctx.beginPath();
+    ctx.moveTo(wx(seg.z0), wy(sign * seg.x0 / 2));
+    ctx.lineTo(wx(seg.z1), wy(sign * seg.x1 / 2));
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 保留中の編集がなければここまで
+  const ed = state.edit;
+  if (!ed || ed.err) return;
+  const NE = (a, b) => Math.abs(a - b) > 1e-9;
+  const startMoved = NE(ed.x0, seg.x0) || NE(ed.z0, seg.z0);
+  if (!startMoved && !NE(ed.x1, seg.x1) && !NE(ed.z1, seg.z1)) return;
+
+  ctx.save();
+  ctx.strokeStyle = acc;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([7, 4]);
+  // 新しい始点 → 新しい終点
+  for (const sign of [1, -1]) {
+    ctx.beginPath();
+    ctx.moveTo(wx(ed.z0), wy(sign * ed.x0 / 2));
+    ctx.lineTo(wx(ed.z1), wy(sign * ed.x1 / 2));
+    ctx.stroke();
+  }
+  // 始点が動くなら前ブロックも一緒に変わるので、そのゴースト線も描く
+  const prev = startMoved ? prevSegOf(seg) : null;
+  if (prev && ed.startEditable) {
+    ctx.globalAlpha = 0.7;
+    for (const sign of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(wx(prev.z0), wy(sign * prev.x0 / 2));
+      ctx.lineTo(wx(ed.z0), wy(sign * ed.x0 / 2));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.setLineDash([]);
+
+  // 端点マーカー＋座標ラベル（上半分のみ）
+  const label = (v, wxv, wyv) => {
+    ctx.font = "12px system-ui, sans-serif";
+    const tw = ctx.measureText(v).width;
+    ctx.fillStyle = css.getPropertyValue("--panel").trim();
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(wxv - 3, wyv - 13, tw + 6, 17);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = acc;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(wxv - 3, wyv - 13, tw + 6, 17);
+    ctx.fillStyle = css.getPropertyValue("--text").trim();
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(v, wxv, wyv);
+  };
+  const pts = startMoved ? [[ed.x0, ed.z0], [ed.x1, ed.z1]] : [[ed.x1, ed.z1]];
+  for (const [px, pz] of pts) {
+    ctx.fillStyle = acc;
+    for (const sign of [1, -1]) {
+      ctx.beginPath();
+      ctx.arc(wx(pz), wy(sign * px / 2), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    label(`⌀${fmt(px)} Z${fmt(pz)}`, wx(pz) + 9, wy(px / 2) - 9);
+  }
+  ctx.restore();
 }
 
 // 交点測定の描画：選択中の1本目ハイライト＋確定した交点の延長線・マーカー・座標
@@ -839,14 +962,182 @@ function lineIntersect(a, b) {
 
 const G_NAME = { 0: "G0 早送り", 1: "G1 切削", 2: "G2 円弧(CW)", 3: "G3 円弧(CCW)" };
 
-// G1テーパ線の水平(Z軸)からの角度（半径基準・鋭角0〜90°）。テーパでなければ null
+// G1テーパ線の水平(Z軸)からの角度（半径基準・符号付き -90〜90°）。テーパでなければ null
+// 符号の定義は signedAngle() を参照。大きさは従来どおり鋭角。
 function taperAngle(s) {
   if (s.type !== 1) return null;
-  const dr = (s.x1 - s.x0) / 2, dz = s.z1 - s.z0;
-  const ang = Math.atan2(Math.abs(dr), Math.abs(dz)) * 180 / Math.PI;
-  if (ang <= 0.5 || ang >= 89.5) return null; // 端面(≈0°)・外径(≈90°)は除外
+  const ang = signedTaperAngle(s);
+  if (ang == null) return null;
+  const mag = Math.abs(ang);
+  if (mag <= 0.5 || mag >= 89.5) return null; // 外径(≈0°)・端面(≈90°)は除外
   return ang;
 }
+
+// 符号付きテーパ角（半径基準・水平=Z軸から、(-90, 90]）
+//   0°=外径(Z軸平行) / ±90°=端面(X軸平行) / +=Z+方向へ半径拡大
+// 線の傾きそのものなので、進行方向(Z+へ切るかZ-へ切るか)には依存しない。
+function signedAngle(x0, z0, x1, z1) {
+  const dr = (x1 - x0) / 2, dz = z1 - z0;
+  if (Math.abs(dz) < 1e-9) {
+    if (Math.abs(dr) < 1e-9) return null;   // 始点＝終点
+    return dr > 0 ? 90 : -90;
+  }
+  return Math.atan(dr / dz) * 180 / Math.PI;
+}
+function signedTaperAngle(s) { return signedAngle(s.x0, s.z0, s.x1, s.z1); }
+// 符号を明示した角度表記（+ は Z+方向へ半径拡大）
+function angStr(a) { return (a > 0 ? "+" : "") + a.toFixed(2) + "°"; }
+
+// edit.auto の値を残り2つから逆算する。不能なら edit.err に文言を入れる。
+// edit.auto の値を残り（始点⌀X/始点Z/終点⌀X/終点Z/角度 のうち他の4つ）から逆算する。
+// 5値・拘束1本＝自由度4なので、4つ与えれば残り1つが決まる。不能なら edit.err に文言を入れる。
+function solveAuto(edit) {
+  edit.err = null;
+  const TOL = 1e-6;
+  const isFace = Math.abs(Math.abs(edit.ang) - 90) < TOL;   // 端面（X軸平行）
+  const isOd = Math.abs(edit.ang) < TOL;                    // 外径（Z軸平行）
+  const t = Math.tan(edit.ang * Math.PI / 180);
+  const dr = (edit.x1 - edit.x0) / 2;
+  const dz = edit.z1 - edit.z0;
+
+  // Z を解く（終点Z / 始点Z 共通）。Z方向の差は dr/tanθ で決まる
+  if (edit.auto === "z1" || edit.auto === "z0") {
+    let d;                                    // 求めるZ方向の差 (z1 - z0)
+    if (isFace) d = 0;
+    else if (Math.abs(t) < 1e-9) {
+      if (Math.abs(dr) < 1e-9) return;        // 外径線かつ⌀X差なし：Zは自由（現状維持）
+      edit.err = `角度0°（外径）では${edit.auto === "z1" ? "終点" : "始点"}Zが決まりません。角度か自動対象を変えてください。`;
+      return;
+    } else d = dr / t;
+    if (edit.auto === "z1") edit.z1 = edit.z0 + d;
+    else edit.z0 = edit.z1 - d;
+
+  // ⌀X を解く（終点⌀X / 始点⌀X 共通）。半径差は dz·tanθ で決まる
+  } else if (edit.auto === "x1" || edit.auto === "x0") {
+    let d;                                    // 求める直径差 (x1 - x0)
+    if (isOd) d = 0;
+    else if (isFace) {
+      if (Math.abs(dz) < 1e-9) return;        // 端面かつZ差なし：⌀Xは自由（現状維持）
+      edit.err = `角度±90°（端面）では${edit.auto === "x1" ? "終点" : "始点"}⌀Xが決まりません。角度か自動対象を変えてください。`;
+      return;
+    } else d = 2 * dz * t;
+    if (edit.auto === "x1") edit.x1 = edit.x0 + d;
+    else edit.x0 = edit.x1 - d;
+
+  } else if (edit.auto === "ang") {
+    const a = signedAngle(edit.x0, edit.z0, edit.x1, edit.z1);
+    if (a == null) { edit.err = "始点と終点が同一のため角度が決まりません。"; return; }
+    edit.ang = a;
+  }
+}
+
+// ===== NCテキスト書き換え =====
+// 数値整形。小数点は必ず残す（Fanucでは "X42" は 0.042mm と解釈されるため）
+function ncNum(v) {
+  if (Math.abs(v) < 5e-4) v = 0;             // -0. を避ける
+  let s = v.toFixed(3);
+  s = s.replace(/0+$/, "");                  // 末尾ゼロ除去 42.000→"42." / -11.250→"-11.25"
+  if (!s.includes(".")) s += ".";
+  return s;
+}
+
+// 行を「コード部」と「(コメント)部」に分割する。括弧内は代替寸法などが入るため書き換え対象外。
+// 閉じ括弧が無い場合はパーサ側と同様にコードとして扱う。
+function splitCodeParts(line) {
+  const parts = [];
+  let buf = "", inC = false;
+  for (const ch of line) {
+    if (!inC && ch === "(") {
+      if (buf) parts.push({ text: buf, isComment: false });
+      buf = ch; inC = true;
+    } else if (inC && ch === ")") {
+      buf += ch; parts.push({ text: buf, isComment: true }); buf = ""; inC = false;
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf) parts.push({ text: buf, isComment: false });
+  return parts;
+}
+function joinParts(parts) { return parts.map(p => p.text).join(""); }
+
+// ブロック内のワード順の慣例。語を新設するときの挿入位置を決めるのに使う
+const WORD_RANK = { N: -1, O: -1, G: 0, X: 1, U: 1, Z: 2, W: 2, R: 3, I: 3, K: 3, T: 4, F: 5, S: 6, M: 7 };
+
+// 行の座標語を書き換える（コード部のみ対象）。
+// cands: [{L:"X", inc:false}, {L:"U", inc:true}] のように候補を優先順に並べる。
+// 該当語が無ければ新設し、最初の F/M/S 語の直前に挿入する。
+function setWord(line, cands, absVal, startVal) {
+  const parts = splitCodeParts(line);
+  for (const c of cands) {
+    const re = new RegExp("(" + c.L + ")\\s*([+-]?[0-9]*\\.?[0-9]+)", "i");
+    for (const p of parts) {
+      if (p.isComment || !re.test(p.text)) continue;
+      const v = c.inc ? absVal - startVal : absVal;
+      p.text = p.text.replace(re, (m, l) => l + ncNum(v));
+      return joinParts(parts);
+    }
+  }
+  // 新設：慣例のワード順（N/O → G → X/U → Z/W → R/I/K → T → F → S → M）を保つよう、
+  // 自分より後ろに来るべき最初の語の直前に挿入する
+  const word = cands[0].L + ncNum(cands[0].inc ? absVal - startVal : absVal);
+  const rank = WORD_RANK[cands[0].L.toUpperCase()];
+  const reWord = /([A-Za-z])\s*[+-]?[0-9]*\.?[0-9]+/g;
+  for (const p of parts) {
+    if (p.isComment) continue;
+    reWord.lastIndex = 0;
+    let m;
+    while ((m = reWord.exec(p.text)) !== null) {
+      const r = WORD_RANK[m[1].toUpperCase()];
+      if (r != null && r > rank) {
+        p.text = p.text.slice(0, m.index) + word + p.text.slice(m.index);
+        return joinParts(parts);
+      }
+    }
+  }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (!parts[i].isComment) { parts[i].text += word; return joinParts(parts); }
+  }
+  return line + word;
+}
+
+// 行に触らなかった場合、その軸の終点がいくつになるか（始点が ed で動いたあとの値）
+//   abs  … 行の絶対値のまま（始点が動いても不変）
+//   inc  … 新しい始点 + 元の増分
+//   none … 新しい始点そのもの（モーダル継承）
+function inheritedEnd(line, absL, incL, newStart, segStart, segEnd) {
+  switch (axisMode(line, absL, incL)) {
+    case "abs": return segEnd;
+    case "inc": return newStart + (segEnd - segStart);
+    default:    return newStart;
+  }
+}
+
+// 現ブロック行：終点を反映する。行に触らなくても正しい値になるなら書き換えない
+// （＝省略/増分指定の軸は始点に追従させ、元のプログラム構造を保つ）
+function buildEndLine(seg, ed) {
+  let line = state.data.rawLines[seg.line - 1];
+  const NE = (a, b) => isFinite(a) && Math.abs(a - b) > 1e-9;
+  const x0 = isFinite(ed.x0) ? ed.x0 : seg.x0;
+  const z0 = isFinite(ed.z0) ? ed.z0 : seg.z0;
+  if (NE(ed.x1, inheritedEnd(line, "X", "U", x0, seg.x0, seg.x1)))
+    line = setWord(line, [{ L: "X", inc: false }, { L: "U", inc: true }], ed.x1, x0);
+  if (NE(ed.z1, inheritedEnd(line, "Z", "W", z0, seg.z0, seg.z1)))
+    line = setWord(line, [{ L: "Z", inc: false }, { L: "W", inc: true }], ed.z1, z0);
+  if (isArcSeg(seg) && seg.r != null && NE(ed.r, seg.r))
+    line = setWord(line, [{ L: "R", inc: false }], ed.r, 0);
+  return line;
+}
+
+// 前ブロック行：その終点（＝このブロックの始点）を反映する
+function buildStartLine(prevSeg, ed) {
+  let line = state.data.rawLines[prevSeg.line - 1];
+  const NE = (a, b) => isFinite(a) && Math.abs(a - b) > 1e-9;
+  if (NE(ed.x0, prevSeg.x1)) line = setWord(line, [{ L: "X", inc: false }, { L: "U", inc: true }], ed.x0, prevSeg.x0);
+  if (NE(ed.z0, prevSeg.z1)) line = setWord(line, [{ L: "Z", inc: false }, { L: "W", inc: true }], ed.z0, prevSeg.z0);
+  return line;
+}
+function isArcSeg(s) { return s.type === 2 || s.type === 3; }
 
 function showTooltip(s, clientX, clientY) {
   const rect = wrap.getBoundingClientRect();
@@ -857,7 +1148,7 @@ function showTooltip(s, clientX, clientY) {
     `始: ⌀${fmt(s.x0)} Z${fmt(s.z0)}<br>` +
     `終: ⌀${fmt(s.x1)} Z${fmt(s.z1)}` +
     (s.r != null ? `<br>R${fmt(s.r)}` : "") +
-    (ang != null ? `<br>水平から ∠${ang.toFixed(2)}°` : "");
+    (ang != null ? `<br>水平から ∠${angStr(ang)}` : "");
   let tx = clientX - rect.left + 14, ty = clientY - rect.top + 14;
   if (tx + tooltip.offsetWidth > rect.width) tx = clientX - rect.left - tooltip.offsetWidth - 14;
   if (ty + tooltip.offsetHeight > rect.height) ty = clientY - rect.top - tooltip.offsetHeight - 14;
@@ -867,14 +1158,20 @@ function showTooltip(s, clientX, clientY) {
 function hideTooltip() { tooltip.style.display = "none"; }
 
 // ドラッグ（パン）
-let dragging = false, lastX = 0, lastY = 0, moved = false;
-cv.addEventListener("mousedown", e => { dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY; });
+let dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0, moved = false;
+cv.addEventListener("mousedown", e => {
+  dragging = true; moved = false;
+  lastX = downX = e.clientX; lastY = downY = e.clientY;
+});
 window.addEventListener("mouseup", () => { dragging = false; });
 cv.addEventListener("mousemove", e => {
   if (dragging) {
     state.offsetX += e.clientX - lastX;
     state.offsetY += e.clientY - lastY;
-    lastX = e.clientX; lastY = e.clientY; moved = true;
+    lastX = e.clientX; lastY = e.clientY;
+    // 押下位置から一定距離動いて初めて「ドラッグ」とみなす
+    // （移動量0のmousemoveでクリック選択が潰れるのを防ぐ）
+    if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 3) moved = true;
     draw();
     return;
   }
@@ -892,14 +1189,24 @@ cv.addEventListener("mouseleave", () => { state.hoverSeg = null; hideTooltip(); 
 
 // 交点測定：クリックでG1線を2本選択
 function ixModeOn() { return document.getElementById("ixMode").checked; }
+function editModeOn() { return document.getElementById("editMode").checked; }
 function setIxHint(msg) { document.getElementById("ixHint").textContent = msg; }
 function updateIxHint() {
+  if (editModeOn()) { setIxHint("編集するブロックをクリック（図 または 右のソース行）"); return; }
   if (!ixModeOn()) { setIxHint("ホイール=ズーム / ドラッグ=移動"); return; }
   setIxHint(state.ixFirst ? "2本目のG1線をクリック" : "1本目のG1線をクリック");
 }
 cv.addEventListener("click", e => {
-  if (moved || !ixModeOn() || !state.data) return; // ドラッグは無視
-  const rect = cv.getBoundingClientRect();
+  if (moved || !state.data) return; // ドラッグは無視
+  const r0 = cv.getBoundingClientRect();
+  if (editModeOn()) {
+    const seg = hitTest(e.clientX - r0.left, e.clientY - r0.top);
+    if (!seg) { setIxHint("ブロックが見つかりません（線の近くをクリック）"); return; }
+    selectEditSeg(seg.line);
+    return;
+  }
+  if (!ixModeOn()) return;
+  const rect = r0;
   const seg = pickG1(e.clientX - rect.left, e.clientY - rect.top);
   if (!seg) { setIxHint("G1線が見つかりません（線の近くをクリック）"); return; }
   if (!state.ixFirst) {
@@ -919,7 +1226,17 @@ cv.addEventListener("click", e => {
   draw();
 });
 window.addEventListener("keydown", e => {
-  if (e.key === "Escape") { state.ixFirst = null; state.ixPoints = []; updateIxHint(); draw(); }
+  if (e.key === "Escape") {
+    state.ixFirst = null; state.ixPoints = [];
+    clearEditSel();
+    updateIxHint(); draw();
+    return;
+  }
+  // Ctrl+Z で編集を1段戻す（入力欄にフォーカスがあるときは既定動作を優先）
+  const tag = (e.target && e.target.tagName || "").toUpperCase();
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && tag !== "INPUT" && tag !== "TEXTAREA") {
+    if (undoStack.length) { e.preventDefault(); undoEdit(); }
+  }
 });
 
 // ホイールズーム（カーソル中心）
@@ -943,7 +1260,7 @@ function renderSrc() {
   const lines = state.data.rawLines;
   for (let i = 0; i < lines.length; i++) {
     const div = document.createElement("div");
-    div.className = "ln";
+    div.className = "ln" + (state.editLine === i + 1 ? " sel" : "");
     div.dataset.line = i + 1;
     div.innerHTML = `<span class="num">${i+1}</span><span class="code"></span>`;
     div.querySelector(".code").textContent = lines[i];
@@ -954,6 +1271,8 @@ function renderSrc() {
       draw();
     });
     div.addEventListener("mouseleave", () => { state.hoverSeg = null; draw(); });
+    // クリックで座標アシストの対象に選択（モード不問）
+    div.addEventListener("click", () => selectEditSeg(i + 1));
     el.appendChild(div);
   }
 }
@@ -998,19 +1317,361 @@ function onOriginChange(e) {
   draw();
 }
 
+// ===== 座標アシスト =====
+// 選択は行番号で保持する（reparse で segs が作り直されるため参照は持てない）
+function editSeg() {
+  if (!state.data || state.editLine == null) return null;
+  return state.data.segs.find(s => s.line === state.editLine) || null;
+}
+// 選択セグメントの直前のセグメント（始点の書き込み先候補）
+function prevSegOf(seg) {
+  const i = state.data.segs.indexOf(seg);
+  return i > 0 ? state.data.segs[i - 1] : null;
+}
+
+// 自動対象にできる値。追従中の軸は始点・終点とも対象外
+//（X が追従なら x1 = x0 + 一定 なので、角度式は X 方向の自由度を持たない）
+function autoCandidates(ed) {
+  if (!ed) return [];
+  const list = [];
+  if (!ed.followX) list.push("x0", "x1");
+  if (!ed.followZ) list.push("z0", "z1");
+  if (list.length) list.push("ang");
+  return list;
+}
+
+// 自動計算される点＝動かす点。もう一方の点は基準（アンカー）として触らせない。
+// 自動が角度のときは「自動になる点」が無いので、両端とも編集できる。
+function movingPoint(ed) {          // → "start" | "end" | null
+  if (!ed || !ed.auto) return null;
+  if (ed.auto === "x0" || ed.auto === "z0") return "start";
+  if (ed.auto === "x1" || ed.auto === "z1") return "end";
+  return null;
+}
+function isAnchorField(ed, field) {
+  const mp = movingPoint(ed);
+  if (!mp) return false;
+  return mp === "start" ? (field === "x1" || field === "z1")
+                        : (field === "x0" || field === "z0");
+}
+
+function selectEditSeg(lineNo) {
+  const seg = state.data ? state.data.segs.find(s => s.line === lineNo) : null;
+  if (!seg) {
+    state.editLine = null; state.edit = null;
+    renderAssist("この行には移動指令がありません。");
+    markSelectedSrc(); draw();
+    return;
+  }
+  state.editLine = lineNo;
+  const raw = state.data.rawLines[seg.line - 1];
+  const prev = prevSegOf(seg);
+  // 始点を編集できるのは、直前セグメントの終点と一致する＝共有頂点のときだけ
+  const startEditable = !!prev &&
+    Math.abs(prev.x1 - seg.x0) < 1e-9 && Math.abs(prev.z1 - seg.z0) < 1e-9;
+  let startReason = null;
+  if (!startEditable) {
+    const o = origins[seg.tool];
+    if (o && isFinite(o.x) && isFinite(o.z) &&
+        Math.abs(o.x - seg.x0) < 1e-9 && Math.abs(o.z - seg.z0) < 1e-9) {
+      startReason = `※ 始点は工具T${seg.tool}の原位置です。凡例の入力欄で変更してください。`;
+    } else {
+      startReason = "※ 始点は前ブロックの終点ではないため編集できません（プログラム先頭／G28・G50後の位置決めで決まります）。";
+    }
+  }
+  state.edit = {
+    x0: seg.x0, z0: seg.z0, x1: seg.x1, z1: seg.z1,
+    ang: signedTaperAngle(seg),
+    r: seg.r,
+    auto: isArcSeg(seg) ? null : "z1",
+    startEditable,
+    startReason,
+    prevLine: prev ? prev.line : null,
+    // 終点がその軸で始点に追従するか（増分/省略）。「固定」ボタンで解除できる
+    followX: axisFollows(raw, "X", "U"),
+    followZ: axisFollows(raw, "Z", "W"),
+    err: null,
+  };
+  if (state.edit.ang == null) state.edit.ang = 0;
+  // 追従軸は自動対象にできないので、既定の "z1" が不可なら候補の先頭に落とす
+  if (state.edit.auto && !autoCandidates(state.edit).includes(state.edit.auto)) {
+    state.edit.auto = autoCandidates(state.edit)[0] || null;
+  }
+  renderAssist();
+  markSelectedSrc();
+  updateIxHint();
+  draw();
+}
+
+function clearEditSel() {
+  state.editLine = null; state.edit = null;
+  renderAssist(); markSelectedSrc();
+}
+
+// #src の選択行ハイライトを付け替える（renderSrc の再構築なしで済ませる）
+function markSelectedSrc() {
+  const el = document.getElementById("src");
+  const prev = el.querySelector(".ln.sel");
+  if (prev) prev.classList.remove("sel");
+  if (state.editLine != null) {
+    const t = el.querySelector(`.ln[data-line="${state.editLine}"]`);
+    if (t) { t.classList.add("sel"); t.scrollIntoView({ block: "nearest" }); }
+  }
+}
+
+// 括弧内に代替寸法（X/Z/U/W/R 語）が入っているか
+function hasAltDims(line) {
+  return splitCodeParts(line).some(p => p.isComment && /[XZUWRxzuwr]\s*[+-]?[0-9]/.test(p.text));
+}
+// 行が軸をどう指定しているか（コード部のみ判定。括弧内の代替値は見ない）
+//   "abs"  絶対語(X/Z)あり  → 終点は行の値で固定。始点が動いても終点は動かない
+//   "inc"  増分語(U/W)あり  → 終点 = 始点 + 増分 → 始点に追従する
+//   "none" どちらも無し     → 終点 = 始点（モーダル継承） → 始点に追従する
+function axisMode(line, absL, incL) {
+  const code = splitCodeParts(line).filter(p => !p.isComment);
+  const has = L => code.some(p => new RegExp(L + "\\s*[+-]?[0-9]*\\.?[0-9]+", "i").test(p.text));
+  if (has(absL)) return "abs";
+  if (has(incL)) return "inc";
+  return "none";
+}
+// 終点がその軸で始点に追従するか（増分・省略のとき）
+function axisFollows(line, absL, incL) { return axisMode(line, absL, incL) !== "abs"; }
+
+let assistEls = {};
+
+function renderAssist(msg) {
+  const el = document.getElementById("assist");
+  const seg = editSeg();
+  assistEls = {};
+  if (!seg) {
+    el.className = "assist";
+    el.innerHTML = `<div class="ahead">座標アシスト</div>` +
+      `<div class="note">${msg || "図の線 または 右のソース行をクリックして編集するブロックを選びます。"}</div>` +
+      (undoStack.length ? `<div class="btns"><button id="aUndo">戻す</button></div>` : "");
+    const u = document.getElementById("aUndo");
+    if (u) u.addEventListener("click", undoEdit);
+    return;
+  }
+
+  const ed = state.edit;
+  const arc = isArcSeg(seg);
+  const raw = state.data.rawLines[seg.line - 1];
+  const cands = arc ? [] : autoCandidates(ed);
+  // opts: { readonly, follow:"x1"|"z1"（追従中＝固定ボタンを出す）, anchor, unit }
+  const row = (lab, field, val, opts) => {
+    const o = opts || {};
+    const isAuto = ed.auto === field;
+    const ro = isAuto || o.readonly || o.anchor;
+    // 追従軸はプログラムの構造上どうしても動くので「基準」より「追従」を優先して見せる
+    const tag = o.follow ? `<span class="tag">追従</span><button class="pin" data-pin="${o.follow}" title="この軸を固定して編集できるようにする">固定</button>`
+              : (o.anchor ? `<span class="tag">基準</span>` : "");
+    return `<div class="arow"><span class="lab">${lab}</span>` +
+      `<input type="number" step="any" data-af="${field}" value="${val}"${ro ? " readonly" : ""}>` +
+      (o.unit || "") + tag +
+      (cands.includes(field) ? `<label class="auto"><input type="radio" name="autoField" value="${field}"${isAuto ? " checked" : ""}> 自動</label>` : "") +
+      `</div>`;
+  };
+  const anchor = f => ({ anchor: isAnchorField(ed, f) });
+
+  let html = `<div class="ahead"><span class="g">${G_NAME[seg.type] || "G" + seg.type}</span> 行${seg.line} T${seg.tool}</div>`;
+  if (!arc) {
+    const mp = movingPoint(ed);
+    html += `<div class="note">${mp === "start" ? "動かす点: <b>始点</b>（終点は基準）"
+                              : mp === "end" ? "動かす点: <b>終点</b>（始点は基準）"
+                              : "両端を入力して角度を求めます"}</div>`;
+  }
+  if (ed.startEditable) {
+    html += row("始点⌀X", "x0", fmt(ed.x0), anchor("x0"));
+    html += row("始点Z", "z0", fmt(ed.z0), anchor("z0"));
+  } else {
+    html += `<div class="arow"><span class="lab">始点</span><span class="fixed">⌀${fmt(seg.x0)} Z${fmt(seg.z0)}</span></div>`;
+    html += `<div class="note">${ed.startReason}</div>`;
+  }
+  html += row("終点⌀X", "x1", fmt(ed.x1), { readonly: ed.followX, follow: ed.followX ? "x1" : null, anchor: isAnchorField(ed, "x1") });
+  html += row("終点Z", "z1", fmt(ed.z1), { readonly: ed.followZ, follow: ed.followZ ? "z1" : null, anchor: isAnchorField(ed, "z1") });
+  if (arc) {
+    html += `<div class="arow"><span class="lab">R</span><input type="number" step="any" data-af="r" value="${ed.r != null ? fmt(ed.r) : ""}"></div>`;
+    html += `<div class="note">円弧は角度拘束の対象外です（始点・終点・R の直接編集）。</div>`;
+  } else {
+    html += row("角度", "ang", ed.ang.toFixed(3), { unit: `<span class="fixed">°</span>` });
+    html += `<div class="note">角度は半径基準・水平(Z軸)から。+ = Z+方向へ半径拡大 / 0°=外径 / ±90°=端面。</div>`;
+  }
+  html += `<div class="err" id="aErr"></div>`;
+  if (ed.followX || ed.followZ)
+    html += `<div class="note">※ この行は${ed.followX && ed.followZ ? "⌀X・Z両方" : (ed.followX ? "⌀X" : "Z")}を省略/増分指定しているため、終点は始点に追従します。「固定」で語を新設して固定できます。</div>`;
+  if (hasAltDims(raw)) html += `<div class="note">※ この行の括弧内の代替値は自動更新されません。</div>`;
+  if (ed.startEditable) {
+    html += `<div class="note">※ 始点の変更は前ブロック(行${ed.prevLine})を書き換えます。`;
+    if (hasAltDims(state.data.rawLines[ed.prevLine - 1])) html += `前ブロックの括弧内代替値も自動更新されません。`;
+    html += `</div>`;
+  }
+  // 次ブロックが軸を省略/増分指定していると、終点変更が後続にも波及する
+  const next = state.data.segs[state.data.segs.indexOf(seg) + 1];
+  if (next) {
+    const nraw = state.data.rawLines[next.line - 1];
+    const fx = axisFollows(nraw, "X", "U"), fz = axisFollows(nraw, "Z", "W");
+    if (fx || fz)
+      html += `<div class="note">※ 次のブロック(行${next.line})が${fx && fz ? "⌀X・Z両方" : (fx ? "⌀X" : "Z")}を省略/増分指定しているため、終点変更は後続にも波及します。</div>`;
+  }
+  html += `<div class="btns"><button class="pri" id="aApply">適用</button>` +
+    `<button id="aUndo"${undoStack.length ? "" : " disabled"}>戻す</button>` +
+    `<button id="aClear">選択解除</button></div>`;
+
+  el.className = "assist on";
+  el.innerHTML = html;
+
+  assistEls.err = document.getElementById("aErr");
+  assistEls.apply = document.getElementById("aApply");
+  assistEls.inputs = {};
+  el.querySelectorAll("input[data-af]").forEach(inp => {
+    assistEls.inputs[inp.dataset.af] = inp;
+    inp.addEventListener("input", onAssistInput);
+  });
+  el.querySelectorAll("input[name=autoField]").forEach(rb => {
+    rb.addEventListener("change", () => {
+      state.edit.auto = rb.value;
+      solveAuto(state.edit);   // 切替時に自動側を解き直す
+      renderAssist(); draw();
+    });
+  });
+  // 「固定」＝その軸の追従を解除し、終点を明示値として編集できるようにする
+  el.querySelectorAll("button[data-pin]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.pin === "x1") state.edit.followX = false;
+      else state.edit.followZ = false;
+      renderAssist(); draw();
+    });
+  });
+  document.getElementById("aApply").addEventListener("click", applyEdit);
+  document.getElementById("aUndo").addEventListener("click", undoEdit);
+  document.getElementById("aClear").addEventListener("click", () => { clearEditSel(); draw(); });
+  syncAssistOutputs();
+}
+
+function onAssistInput(e) {
+  const seg = editSeg();
+  if (!seg || !state.edit) return;
+  const ed = state.edit;
+  const f = e.target.dataset.af;
+  if (isAnchorField(ed, f)) return;      // 基準点は動かさない（readonly だが念のため）
+  const v = parseFloat(e.target.value);
+  if (!isFinite(v)) return;              // 入力途中（"-" や空欄）は無視
+  // 始点を動かしたとき、その軸が追従なら終点も同じだけずらす（軸ごとに独立）
+  if (f === "x0" && ed.followX) ed.x1 += v - ed.x0;
+  if (f === "z0" && ed.followZ) ed.z1 += v - ed.z0;
+  ed[f] = v;
+  if (!isArcSeg(seg)) solveAuto(ed);
+  syncAssistOutputs();
+  draw();
+}
+
+// 自動欄・エラー・ボタンだけを更新する（フォーカスを失わないためパネルは作り直さない）
+function syncAssistOutputs() {
+  const seg = editSeg();
+  if (!seg || !state.edit || !assistEls.err) return;
+  const ed = state.edit;
+  const put = (f) => {
+    const inp = assistEls.inputs[f];
+    if (inp) inp.value = f === "ang" ? ed.ang.toFixed(3) : fmt(ed[f]);
+  };
+  if (ed.auto) put(ed.auto);
+  // 追従中の終点欄は始点入力に連動するので毎回書き戻す
+  if (ed.followX) put("x1");
+  if (ed.followZ) put("z1");
+  assistEls.err.textContent = ed.err || "";
+  const NE = (a, b) => Math.abs(a - b) > 1e-9;
+  const changed = NE(ed.x0, seg.x0) || NE(ed.z0, seg.z0) || NE(ed.x1, seg.x1) || NE(ed.z1, seg.z1) ||
+    (isArcSeg(seg) && seg.r != null && isFinite(ed.r) && NE(ed.r, seg.r));
+  assistEls.apply.disabled = !!ed.err || !changed;
+}
+
+// ===== 適用 / 元に戻す / 保存 =====
+function applyEdit() {
+  const seg = editSeg();
+  const ed = state.edit;
+  if (!seg || !ed || ed.err) return;
+  const lines = lastText.split(/\r?\n/);
+  let touched = false;
+
+  // 始点＝前ブロックの終点。共有頂点が動くなら前ブロックの行を書き換える
+  const prev = prevSegOf(seg);
+  if (ed.startEditable && prev &&
+      (Math.abs(ed.x0 - prev.x1) > 1e-9 || Math.abs(ed.z0 - prev.z1) > 1e-9)) {
+    const sl = buildStartLine(prev, ed);
+    if (lines[prev.line - 1] !== sl) { lines[prev.line - 1] = sl; touched = true; }
+  }
+  const el = buildEndLine(seg, ed);
+  if (lines[seg.line - 1] !== el) { lines[seg.line - 1] = el; touched = true; }
+  if (!touched) return;
+
+  undoStack.push(lastText);
+  lastText = lines.join(eol);
+  syncDirty();
+  reparse();
+  draw();
+}
+
+function undoEdit() {
+  if (!undoStack.length) return;
+  lastText = undoStack.pop();
+  syncDirty();
+  reparse();
+  draw();
+}
+
+function syncDirty() {
+  dirty = lastText !== savedText;
+  updateFileNameLabel();
+}
+
+// reparse 後、同じ行を選び直して編集値を実際の座標に同期する
+function reselectAfterReparse() {
+  if (state.editLine == null) { renderAssist(); markSelectedSrc(); return; }
+  const auto = state.edit ? state.edit.auto : null;
+  selectEditSeg(state.editLine);
+  // 自動対象は引き継ぐ。再パースで候補から外れた場合は selectEditSeg が入れた既定のまま
+  if (state.edit && auto && autoCandidates(state.edit).includes(auto)) {
+    state.edit.auto = auto;
+    renderAssist();
+  }
+}
+
+function updateFileNameLabel() {
+  document.getElementById("fileName").textContent = state.fileName + (dirty ? " *" : "");
+}
+
+function saveFile() {
+  if (!state.data) return;
+  const blob = new Blob([lastText], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = state.fileName || "program.nc";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  savedText = lastText;
+  syncDirty();
+}
+
 // ===== ロード =====
 let lastText = "";
 function load(text, name) {
   lastText = text;
+  savedText = text;
+  eol = text.includes("\r\n") ? "\r\n" : "\n";  // 元の改行コードを保つ
+  undoStack = [];
   origins = {};                 // 新規ファイルでは原位置をクリア
   state.data = parseNc(text, origins);
   state.fileName = name;
   state.playhead = 1; state.playing = false;
   state.ixFirst = null; state.ixPoints = [];  // 交点測定をクリア
-  document.getElementById("fileName").textContent = name;
+  state.editLine = null; state.edit = null;   // 座標アシストをクリア
+  syncDirty();
   document.getElementById("segCount").textContent = state.data.segs.length + " seg";
   renderSrc();
   renderLegend();
+  renderAssist();
   fitView();
   syncTransport();
   draw();
@@ -1022,6 +1683,7 @@ function reparse() {
   state.data = parseNc(lastText, origins);
   document.getElementById("segCount").textContent = state.data.segs.length + " seg";
   renderSrc();
+  reselectAfterReparse();   // 座標アシストの選択・編集値を新しいセグメントに同期
   syncTransport();
 }
 
@@ -1102,13 +1764,28 @@ for (const id of ["showRapid", "showLabels", "flipArc", "showDir"]) {
 
 // 交点測定 配線
 document.getElementById("ixMode").addEventListener("change", () => {
-  cv.style.cursor = ixModeOn() ? "pointer" : "crosshair";
+  if (ixModeOn()) document.getElementById("editMode").checked = false;
+  cv.style.cursor = (editModeOn() || ixModeOn()) ? "pointer" : "crosshair";
   if (!ixModeOn()) state.ixFirst = null;
   updateIxHint();
   draw();
 });
 document.getElementById("ixClear").addEventListener("click", () => {
   state.ixFirst = null; state.ixPoints = []; updateIxHint(); draw();
+});
+
+// 座標アシスト 配線（交点測定とは排他）
+document.getElementById("editMode").addEventListener("change", () => {
+  if (editModeOn()) { document.getElementById("ixMode").checked = false; state.ixFirst = null; }
+  cv.style.cursor = (editModeOn() || ixModeOn()) ? "pointer" : "crosshair";
+  updateIxHint();
+  draw();
+});
+document.getElementById("saveBtn").addEventListener("click", saveFile);
+window.addEventListener("beforeunload", e => {
+  if (!dirty) return;
+  e.preventDefault();
+  e.returnValue = "";
 });
 
 // トランスポート配線
@@ -1135,6 +1812,7 @@ window.addEventListener("resize", resizeCanvas);
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 
 // 初期化（サンプルは埋め込まない：ファイルを読み込むまで空表示）
+renderAssist();
 resizeCanvas();
 </script>
 </body>
