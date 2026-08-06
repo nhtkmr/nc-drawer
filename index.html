@@ -100,7 +100,8 @@
   .legend .orow .oin { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-size: 11px; }
   .legend .orow input { width: 54px; font: inherit; font-size: 11px; padding: 1px 3px;
     background: var(--canvas-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
-  .assist { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px; }
+  .assist { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px;
+    max-height: 55vh; overflow-y: auto; }
   .assist.on { border-top: 2px solid var(--accent); }
   .assist .ahead { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 5px; }
   .assist .ahead .g { color: var(--accent); }
@@ -343,7 +344,7 @@ let state = {
   speed: 1,      // 再生速度倍率
   // 交点測定
   ixFirst: null,      // 選択中の1本目セグメント
-  ixPoints: [],       // {z, r, a, b} 理論交点
+  ixPoints: [],       // {aLine, bLine} 理論交点を作る2線の行番号。座標は都度解く
   // 座標アシスト
   editLine: null,     // 選択中セグメントの行番号（reparseを跨いで生き残る識別子）
   edit: null,         // { x1, z1, ang, r, auto:"x1"|"z1"|"ang", err }
@@ -664,6 +665,33 @@ function drawEditPreview() {
     }
     label(`⌀${fmt(px)} Z${fmt(pz)}`, wx(pz) + 9, wy(px / 2) - 9);
   }
+
+  // 交点モード：保留中の交点までゴースト線を延長し、× マーカーと座標を出す
+  const ixi = parseIxField(ed.auto);
+  if (ixi && ed.ixList[ixi.i]) {
+    const e = ed.ixList[ixi.i];
+    const anchorEnd = ed.ixAnchor !== "start";
+    const az = anchorEnd ? ed.z1 : ed.z0, ar = (anchorEnd ? ed.x1 : ed.x0) / 2;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = acc;
+    ctx.lineWidth = 1.5;
+    for (const sign of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(wx(az), wy(sign * ar));
+      ctx.lineTo(wx(e.z), wy(sign * e.r));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    for (const sign of [1, -1]) {
+      const mx = wx(e.z), my = wy(sign * e.r), m = 5;
+      ctx.beginPath();
+      ctx.moveTo(mx - m, my - m); ctx.lineTo(mx + m, my + m);
+      ctx.moveTo(mx - m, my + m); ctx.lineTo(mx + m, my - m);
+      ctx.stroke();
+    }
+    label(`⌀${fmt(e.r * 2)} Z${fmt(e.z)}`, wx(e.z) + 9, wy(e.r) - 9);
+  }
   ctx.restore();
 }
 
@@ -685,7 +713,9 @@ function drawIntersections(colMuted) {
     ctx.restore();
   }
 
-  for (const ip of state.ixPoints) {
+  for (const p of state.ixPoints) {
+    const ip = ixResolve(p);
+    if (!ip) continue;             // 行が消えた/平行になった交点は描かない
     // 元2線から交点までの延長線（点線・淡色）
     ctx.save();
     ctx.setLineDash([3, 3]);
@@ -960,6 +990,18 @@ function lineIntersect(a, b) {
   return { z: pa.z + t * da.z, r: pa.r + t * da.r };
 }
 
+// 交点は行番号だけ保持し、座標は毎回その時点のセグメントから解き直す。
+// （セグメントの実体を持つと reparse で作り直された瞬間に古い座標で固まるため）
+function ixResolve(p) {
+  const d = state.data;
+  if (!d) return null;
+  const a = d.segs.find(s => s.line === p.aLine);
+  const b = d.segs.find(s => s.line === p.bLine);
+  if (!a || !b) return null;
+  const ip = lineIntersect(a, b);
+  return ip ? { a, b, z: ip.z, r: ip.r } : null;
+}
+
 const G_NAME = { 0: "G0 早送り", 1: "G1 切削", 2: "G2 円弧(CW)", 3: "G3 円弧(CCW)" };
 
 // G1テーパ線の水平(Z軸)からの角度（半径基準・符号付き -90〜90°）。テーパでなければ null
@@ -988,11 +1030,60 @@ function signedTaperAngle(s) { return signedAngle(s.x0, s.z0, s.x1, s.z1); }
 // 符号を明示した角度表記（+ は Z+方向へ半径拡大）
 function angStr(a) { return (a > 0 ? "+" : "") + a.toFixed(2) + "°"; }
 
-// edit.auto の値を残り2つから逆算する。不能なら edit.err に文言を入れる。
+// 直線上のある座標から、もう一方の座標を求める（線は無限直線として扱う）
+//   axis "z" … z を与えて半径 r を返す / axis "r" … r を与えて z を返す
+// 与えた軸方向にその線が退化していれば null（例：端面の線に対して z を与える）
+function pointOnLineAt(seg, axis, v) {
+  const z0 = seg.z0, r0 = seg.x0 / 2, dz = seg.z1 - seg.z0, dr = (seg.x1 - seg.x0) / 2;
+  if (axis === "z") {
+    if (Math.abs(dz) < 1e-9) return null;      // Z一定の線（端面）では z を指定できない
+    return { z: v, r: r0 + (v - z0) * dr / dz };
+  }
+  if (Math.abs(dr) < 1e-9) return null;        // 半径一定の線（外径）では ⌀X を指定できない
+  return { z: z0 + (v - r0) * dz / dr, r: v };
+}
+
+// 交点モードの逆算：交点の1軸を与えて、交点のもう1軸・角度・動く端点を決める。
+// 線P（相手線）と線N（隣ブロックの線）は固定。アンカー端点も固定。
+function solveByIntersection(edit) {
+  const pf = parseIxField(edit.auto);
+  const entry = edit.ixList[pf.i];
+  const reason = ixBlockReason(edit, entry);
+  if (reason) { edit.err = reason; return; }
+
+  // 1) 交点は相手線 P 上にある → 与えた軸から残りの軸が決まる
+  const givenIsZ = pf.kind === "ipx";           // ⌀Xが自動 ⇒ Zを入力
+  const ip = givenIsZ ? pointOnLineAt(entry.partner, "z", entry.z)
+                      : pointOnLineAt(entry.partner, "r", entry.r);
+  if (!ip) {
+    edit.err = givenIsZ ? `相手線(行${entry.partner.line})はZ一定のため交点Zを動かせません。自動を交点Zにして⌀Xで入力してください。`
+                        : `相手線(行${entry.partner.line})は⌀X一定のため交点⌀Xを動かせません。自動を交点⌀Xにして Z で入力してください。`;
+    return;
+  }
+  entry.z = ip.z; entry.r = ip.r;
+
+  // 2) 線A = アンカーと交点を通る直線 → 角度が決まる
+  const anchorEnd = edit.ixAnchor !== "start";
+  const ax = anchorEnd ? edit.x1 : edit.x0, az = anchorEnd ? edit.z1 : edit.z0;
+  const ang = signedAngle(ax, az, ip.r * 2, ip.z);
+  if (ang == null) { edit.err = "アンカーと交点が同じ位置のため線が決まりません。"; return; }
+  edit.ang = ang;
+
+  // 3) 動く端点 = 線A × 線N（隣ブロックの線）
+  const lineA = { x0: ax, z0: az, x1: ip.r * 2, z1: ip.z };
+  const n = anchorEnd ? edit.prevSeg : edit.nextSeg;
+  const hit = lineIntersect(lineA, n);
+  if (!hit) { edit.err = `${anchorEnd ? "前" : "次"}ブロック(行${n.line})が新しい線と平行のため端点が決まりません。`; return; }
+  if (anchorEnd) { edit.x0 = hit.r * 2; edit.z0 = hit.z; }
+  else           { edit.x1 = hit.r * 2; edit.z1 = hit.z; }
+}
+
 // edit.auto の値を残り（始点⌀X/始点Z/終点⌀X/終点Z/角度 のうち他の4つ）から逆算する。
 // 5値・拘束1本＝自由度4なので、4つ与えれば残り1つが決まる。不能なら edit.err に文言を入れる。
+// auto が交点フィールドのときは solveByIntersection に委ねる（拘束が増えて自由度3になる）。
 function solveAuto(edit) {
   edit.err = null;
+  if (parseIxField(edit.auto)) { solveByIntersection(edit); return; }
   const TOL = 1e-6;
   const isFace = Math.abs(Math.abs(edit.ang) - 90) < TOL;   // 端面（X軸平行）
   const isOd = Math.abs(edit.ang) < TOL;                    // 外径（Z軸平行）
@@ -1218,7 +1309,7 @@ cv.addEventListener("click", e => {
     const ip = lineIntersect(state.ixFirst, seg);
     if (!ip) { setIxHint("平行な2線は交点なし"); state.ixFirst = null; }
     else {
-      state.ixPoints.push({ z: ip.z, r: ip.r, a: state.ixFirst, b: seg });
+      state.ixPoints.push({ aLine: state.ixFirst.line, bLine: seg.line });
       state.ixFirst = null;
       setIxHint(`交点: ⌀${fmt(ip.r * 2)} Z${fmt(ip.z)}`);
     }
@@ -1227,8 +1318,14 @@ cv.addEventListener("click", e => {
 });
 window.addEventListener("keydown", e => {
   if (e.key === "Escape") {
-    state.ixFirst = null; state.ixPoints = [];
-    clearEditSel();
+    // 測った交点は編集の足場になるので、まず編集選択だけを解除する。
+    // 解除するものが無ければ交点をクリア（全消しは「交点クリア」ボタン）。
+    if (state.editLine != null || state.ixFirst) {
+      state.ixFirst = null;
+      clearEditSel();
+    } else {
+      state.ixPoints = [];
+    }
     updateIxHint(); draw();
     return;
   }
@@ -1323,10 +1420,62 @@ function editSeg() {
   if (!state.data || state.editLine == null) return null;
   return state.data.segs.find(s => s.line === state.editLine) || null;
 }
-// 選択セグメントの直前のセグメント（始点の書き込み先候補）
+// 選択セグメントの直前／直後のセグメント（動く端点が乗る線＝線N の供給元）
 function prevSegOf(seg) {
   const i = state.data.segs.indexOf(seg);
   return i > 0 ? state.data.segs[i - 1] : null;
+}
+function nextSegOf(seg) {
+  const i = state.data.segs.indexOf(seg);
+  return i >= 0 && i < state.data.segs.length - 1 ? state.data.segs[i + 1] : null;
+}
+
+// 選択セグメントが当事者になっている理論交点を列挙する。
+// partner = 相手線（固定して交点を滑らせる線 P）
+function ixOnSeg(seg) {
+  const out = [];
+  if (!seg || seg.type !== 1) return out;
+  state.ixPoints.forEach((p, idx) => {
+    if (p.aLine !== seg.line && p.bLine !== seg.line) return;
+    const ip = ixResolve(p);
+    if (!ip) return;
+    out.push({ idx, partner: p.aLine === seg.line ? ip.b : ip.a, z: ip.z, r: ip.r });
+  });
+  return out;
+}
+
+// 保留中の線Aから、この線に乗っている交点を解き直す。
+// 自動対象の交点は solveByIntersection が相手線上に置いた値なので上書きしない。
+function refreshIx(ed) {
+  if (!ed || !ed.ixList || !ed.ixList.length) return;
+  const active = parseIxField(ed.auto);
+  const lineA = { x0: ed.x0, z0: ed.z0, x1: ed.x1, z1: ed.z1 };
+  ed.ixList.forEach((e, i) => {
+    if (active && active.i === i) return;
+    const ip = lineIntersect(lineA, e.partner);
+    if (ip) { e.z = ip.z; e.r = ip.r; }
+  });
+}
+
+// 交点フィールド名 "ipx:<n>" / "ipz:<n>" （n = ed.ixList 内の位置）
+function ixField(kind, i) { return kind + ":" + i; }
+function parseIxField(f) {
+  const m = /^(ipx|ipz):(\d+)$/.exec(f || "");
+  return m ? { kind: m[1], i: +m[2] } : null;
+}
+
+// 交点を動かせるか。動かせないなら理由の文言を返す（動かせるなら null）
+function ixBlockReason(ed, entry) {
+  if (!ed || !entry) return "交点がありません。";
+  if (ed.followX || ed.followZ)
+    return `この行は${ed.followX && ed.followZ ? "⌀X・Z両方" : (ed.followX ? "⌀X" : "Z")}を省略/増分指定しているため交点を動かせません。「固定」で解除してください。`;
+  const anchorEnd = ed.ixAnchor !== "start";
+  if (anchorEnd && !ed.startEditable) return "アンカー=終点では始点が動く必要がありますが、この始点は編集できません。";
+  const n = anchorEnd ? ed.prevSeg : ed.nextSeg;
+  if (!n) return `動く${anchorEnd ? "始点" : "終点"}が乗る${anchorEnd ? "前" : "次"}ブロックがありません。`;
+  if (isArcSeg(n)) return `${anchorEnd ? "前" : "次"}ブロック(行${n.line})が円弧のため直線の交点として解けません。`;
+  if (n === entry.partner) return `${anchorEnd ? "前" : "次"}ブロックが相手線(行${entry.partner.line})と同じため退化します。`;
+  return null;
 }
 
 // 自動対象にできる値。追従中の軸は始点・終点とも対象外
@@ -1337,22 +1486,39 @@ function autoCandidates(ed) {
   if (!ed.followX) list.push("x0", "x1");
   if (!ed.followZ) list.push("z0", "z1");
   if (list.length) list.push("ang");
+  (ed.ixList || []).forEach((e, i) => {
+    if (ixBlockReason(ed, e)) return;
+    list.push(ixField("ipx", i), ixField("ipz", i));
+  });
   return list;
 }
 
 // 自動計算される点＝動かす点。もう一方の点は基準（アンカー）として触らせない。
 // 自動が角度のときは「自動になる点」が無いので、両端とも編集できる。
-function movingPoint(ed) {          // → "start" | "end" | null
+function movingPoint(ed) {          // → "start" | "end" | "ix" | null
   if (!ed || !ed.auto) return null;
   if (ed.auto === "x0" || ed.auto === "z0") return "start";
   if (ed.auto === "x1" || ed.auto === "z1") return "end";
+  if (parseIxField(ed.auto)) return "ix";
   return null;
 }
+// 基準＝アンカー側の端点（動かさない点）
 function isAnchorField(ed, field) {
   const mp = movingPoint(ed);
   if (!mp) return false;
+  if (mp === "ix") {
+    return ed.ixAnchor === "start" ? (field === "x0" || field === "z0")
+                                   : (field === "x1" || field === "z1");
+  }
   return mp === "start" ? (field === "x1" || field === "z1")
                         : (field === "x0" || field === "z0");
+}
+// 連動＝交点から導出されて読み取り専用になる欄（動く端点と角度）
+function isDerivedField(ed, field) {
+  if (movingPoint(ed) !== "ix") return false;
+  if (field === "ang") return true;
+  return ed.ixAnchor === "start" ? (field === "x1" || field === "z1")
+                                 : (field === "x0" || field === "z0");
 }
 
 function selectEditSeg(lineNo) {
@@ -1387,6 +1553,11 @@ function selectEditSeg(lineNo) {
     startEditable,
     startReason,
     prevLine: prev ? prev.line : null,
+    prevSeg: prev,
+    nextSeg: nextSegOf(seg),
+    // この線に乗っている理論交点（交点測定で作ったもの）
+    ixList: ixOnSeg(seg),
+    ixAnchor: "end",     // 交点を動かすときの不動側。"end" | "start"
     // 終点がその軸で始点に追従するか（増分/省略）。「固定」ボタンで解除できる
     followX: axisFollows(raw, "X", "U"),
     followZ: axisFollows(raw, "Z", "W"),
@@ -1457,44 +1628,68 @@ function renderAssist(msg) {
   const arc = isArcSeg(seg);
   const raw = state.data.rawLines[seg.line - 1];
   const cands = arc ? [] : autoCandidates(ed);
-  // opts: { readonly, follow:"x1"|"z1"（追従中＝固定ボタンを出す）, anchor, unit }
+  // opts: { readonly, follow:"x1"|"z1"（追従中＝固定ボタンを出す）, anchor, derived, unit }
   const row = (lab, field, val, opts) => {
     const o = opts || {};
     const isAuto = ed.auto === field;
-    const ro = isAuto || o.readonly || o.anchor;
+    const ro = isAuto || o.readonly || o.anchor || o.derived;
     // 追従軸はプログラムの構造上どうしても動くので「基準」より「追従」を優先して見せる
     const tag = o.follow ? `<span class="tag">追従</span><button class="pin" data-pin="${o.follow}" title="この軸を固定して編集できるようにする">固定</button>`
-              : (o.anchor ? `<span class="tag">基準</span>` : "");
+              : o.anchor ? `<span class="tag">基準</span>`
+              : o.derived ? `<span class="tag">連動</span>` : "";
     return `<div class="arow"><span class="lab">${lab}</span>` +
       `<input type="number" step="any" data-af="${field}" value="${val}"${ro ? " readonly" : ""}>` +
       (o.unit || "") + tag +
       (cands.includes(field) ? `<label class="auto"><input type="radio" name="autoField" value="${field}"${isAuto ? " checked" : ""}> 自動</label>` : "") +
       `</div>`;
   };
-  const anchor = f => ({ anchor: isAnchorField(ed, f) });
+  const marks = f => ({ anchor: isAnchorField(ed, f), derived: isDerivedField(ed, f) });
+  const IXN = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"];
 
   let html = `<div class="ahead"><span class="g">${G_NAME[seg.type] || "G" + seg.type}</span> 行${seg.line} T${seg.tool}</div>`;
   if (!arc) {
     const mp = movingPoint(ed);
-    html += `<div class="note">${mp === "start" ? "動かす点: <b>始点</b>（終点は基準）"
-                              : mp === "end" ? "動かす点: <b>終点</b>（始点は基準）"
-                              : "両端を入力して角度を求めます"}</div>`;
+    const ixi = parseIxField(ed.auto);
+    html += `<div class="note">${
+        mp === "ix" ? `動かす点: <b>交点${IXN[ixi.i] || ""}</b>（${ed.ixAnchor === "start" ? "始点" : "終点"}は基準・${ed.ixAnchor === "start" ? "終点" : "始点"}と角度は連動）`
+      : mp === "start" ? "動かす点: <b>始点</b>（終点は基準）"
+      : mp === "end" ? "動かす点: <b>終点</b>（始点は基準）"
+      : "両端を入力して角度を求めます"}</div>`;
   }
   if (ed.startEditable) {
-    html += row("始点⌀X", "x0", fmt(ed.x0), anchor("x0"));
-    html += row("始点Z", "z0", fmt(ed.z0), anchor("z0"));
+    html += row("始点⌀X", "x0", fmt(ed.x0), marks("x0"));
+    html += row("始点Z", "z0", fmt(ed.z0), marks("z0"));
   } else {
     html += `<div class="arow"><span class="lab">始点</span><span class="fixed">⌀${fmt(seg.x0)} Z${fmt(seg.z0)}</span></div>`;
     html += `<div class="note">${ed.startReason}</div>`;
   }
-  html += row("終点⌀X", "x1", fmt(ed.x1), { readonly: ed.followX, follow: ed.followX ? "x1" : null, anchor: isAnchorField(ed, "x1") });
-  html += row("終点Z", "z1", fmt(ed.z1), { readonly: ed.followZ, follow: ed.followZ ? "z1" : null, anchor: isAnchorField(ed, "z1") });
+  html += row("終点⌀X", "x1", fmt(ed.x1), Object.assign(marks("x1"), { readonly: ed.followX, follow: ed.followX ? "x1" : null }));
+  html += row("終点Z", "z1", fmt(ed.z1), Object.assign(marks("z1"), { readonly: ed.followZ, follow: ed.followZ ? "z1" : null }));
   if (arc) {
     html += `<div class="arow"><span class="lab">R</span><input type="number" step="any" data-af="r" value="${ed.r != null ? fmt(ed.r) : ""}"></div>`;
     html += `<div class="note">円弧は角度拘束の対象外です（始点・終点・R の直接編集）。</div>`;
   } else {
-    html += row("角度", "ang", ed.ang.toFixed(3), { unit: `<span class="fixed">°</span>` });
+    html += row("角度", "ang", ed.ang.toFixed(3), Object.assign(marks("ang"), { unit: `<span class="fixed">°</span>` }));
     html += `<div class="note">角度は半径基準・水平(Z軸)から。+ = Z+方向へ半径拡大 / 0°=外径 / ±90°=端面。</div>`;
+  }
+  // 理論交点（交点測定で作ったもののうち、この線に乗っているもの）
+  // 入力できるのは「自動にした交点の、自動でない方の軸」だけ。他は線の動きに連動する表示。
+  const activeIx = parseIxField(ed.auto);
+  for (let i = 0; i < ed.ixList.length; i++) {
+    const e = ed.ixList[i], n = IXN[i] || "";
+    const blocked = ixBlockReason(ed, e);
+    const isActive = !!activeIx && activeIx.i === i;
+    const o = { readonly: !!blocked || !isActive, derived: !isActive && !blocked };
+    html += `<div class="note" style="margin-top:6px">交点${n}　相手線: 行${e.partner.line}</div>`;
+    html += row(`交点${n}⌀X`, ixField("ipx", i), fmt(e.r * 2), o);
+    html += row(`交点${n}Z`, ixField("ipz", i), fmt(e.z), o);
+    if (blocked) html += `<div class="note">※ ${blocked}</div>`;
+  }
+  if (movingPoint(ed) === "ix") {
+    html += `<div class="arow"><span class="lab">アンカー</span>` +
+      `<label class="auto"><input type="radio" name="ixAnchor" value="end"${ed.ixAnchor !== "start" ? " checked" : ""}> 終点</label>` +
+      `<label class="auto"><input type="radio" name="ixAnchor" value="start"${ed.ixAnchor === "start" ? " checked" : ""}> 始点</label></div>`;
+    html += `<div class="note">交点は相手線上を滑り、${ed.ixAnchor === "start" ? "終点は次" : "始点は前"}ブロックの線上を動きます（隣ブロックの向きは保たれます）。</div>`;
   }
   html += `<div class="err" id="aErr"></div>`;
   if (ed.followX || ed.followZ)
@@ -1529,8 +1724,12 @@ function renderAssist(msg) {
   });
   el.querySelectorAll("input[name=autoField]").forEach(rb => {
     rb.addEventListener("change", () => {
+      const wasIx = movingPoint(state.edit) === "ix";
       state.edit.auto = rb.value;
+      // 交点モードへ出入りするときは端点を実際の座標に戻す（前モードの派生値を持ち越さない）
+      if (wasIx !== (movingPoint(state.edit) === "ix")) resetEditValues(state.edit, editSeg());
       solveAuto(state.edit);   // 切替時に自動側を解き直す
+      refreshIx(state.edit);
       renderAssist(); draw();
     });
   });
@@ -1542,10 +1741,28 @@ function renderAssist(msg) {
       renderAssist(); draw();
     });
   });
+  // 交点モードのアンカー切替
+  el.querySelectorAll("input[name=ixAnchor]").forEach(rb => {
+    rb.addEventListener("change", () => {
+      state.edit.ixAnchor = rb.value;
+      resetEditValues(state.edit, editSeg());   // 端点を実際の座標に戻してから解き直す
+      solveAuto(state.edit); refreshIx(state.edit);
+      renderAssist(); draw();
+    });
+  });
   document.getElementById("aApply").addEventListener("click", applyEdit);
   document.getElementById("aUndo").addEventListener("click", undoEdit);
   document.getElementById("aClear").addEventListener("click", () => { clearEditSel(); draw(); });
   syncAssistOutputs();
+}
+
+// 端点・角度を実際のセグメントの値に戻す（モード切替時に派生値を持ち越さないため）
+function resetEditValues(ed, seg) {
+  if (!ed || !seg) return;
+  ed.x0 = seg.x0; ed.z0 = seg.z0; ed.x1 = seg.x1; ed.z1 = seg.z1;
+  const a = signedTaperAngle(seg);
+  ed.ang = a == null ? 0 : a;
+  ed.err = null;
 }
 
 function onAssistInput(e) {
@@ -1553,14 +1770,24 @@ function onAssistInput(e) {
   if (!seg || !state.edit) return;
   const ed = state.edit;
   const f = e.target.dataset.af;
-  if (isAnchorField(ed, f)) return;      // 基準点は動かさない（readonly だが念のため）
+  if (isAnchorField(ed, f) || isDerivedField(ed, f)) return;  // 基準・連動欄は動かさない
   const v = parseFloat(e.target.value);
   if (!isFinite(v)) return;              // 入力途中（"-" や空欄）は無視
-  // 始点を動かしたとき、その軸が追従なら終点も同じだけずらす（軸ごとに独立）
-  if (f === "x0" && ed.followX) ed.x1 += v - ed.x0;
-  if (f === "z0" && ed.followZ) ed.z1 += v - ed.z0;
-  ed[f] = v;
+  const ix = parseIxField(f);
+  if (ix) {
+    // 交点欄への入力。自動になっていない交点は読み取り専用なので無視する
+    const active = parseIxField(ed.auto);
+    if (!active || active.i !== ix.i) return;
+    const entry = ed.ixList[ix.i];
+    if (ix.kind === "ipx") entry.r = v / 2; else entry.z = v;
+  } else {
+    // 始点を動かしたとき、その軸が追従なら終点も同じだけずらす（軸ごとに独立）
+    if (f === "x0" && ed.followX) ed.x1 += v - ed.x0;
+    if (f === "z0" && ed.followZ) ed.z1 += v - ed.z0;
+    ed[f] = v;
+  }
   if (!isArcSeg(seg)) solveAuto(ed);
+  refreshIx(ed);
   syncAssistOutputs();
   draw();
 }
@@ -1572,12 +1799,27 @@ function syncAssistOutputs() {
   const ed = state.edit;
   const put = (f) => {
     const inp = assistEls.inputs[f];
-    if (inp) inp.value = f === "ang" ? ed.ang.toFixed(3) : fmt(ed[f]);
+    if (!inp) return;
+    const ix = parseIxField(f);
+    if (ix) { const e = ed.ixList[ix.i]; inp.value = fmt(ix.kind === "ipx" ? e.r * 2 : e.z); return; }
+    inp.value = f === "ang" ? ed.ang.toFixed(3) : fmt(ed[f]);
   };
   if (ed.auto) put(ed.auto);
   // 追従中の終点欄は始点入力に連動するので毎回書き戻す
   if (ed.followX) put("x1");
   if (ed.followZ) put("z1");
+  // 交点モードでは端点と角度が交点から導出されるので書き戻す
+  if (movingPoint(ed) === "ix") {
+    put("ang");
+    if (ed.ixAnchor === "start") { put("x1"); put("z1"); } else { put("x0"); put("z0"); }
+  }
+  // 交点欄は線の動きに連動するので毎回書き戻す（入力中の欄は上書きしない）
+  ed.ixList.forEach((_, i) => {
+    const a = parseIxField(ed.auto);
+    const skip = a && a.i === i ? (a.kind === "ipx" ? "ipz" : "ipx") : null;
+    if (skip !== "ipx") put(ixField("ipx", i));
+    if (skip !== "ipz") put(ixField("ipz", i));
+  });
   assistEls.err.textContent = ed.err || "";
   const NE = (a, b) => Math.abs(a - b) > 1e-9;
   const changed = NE(ed.x0, seg.x0) || NE(ed.z0, seg.z0) || NE(ed.x1, seg.x1) || NE(ed.z1, seg.z1) ||
@@ -1628,9 +1870,12 @@ function syncDirty() {
 function reselectAfterReparse() {
   if (state.editLine == null) { renderAssist(); markSelectedSrc(); return; }
   const auto = state.edit ? state.edit.auto : null;
+  const ixAnchor = state.edit ? state.edit.ixAnchor : "end";
   selectEditSeg(state.editLine);
+  if (!state.edit) return;
+  state.edit.ixAnchor = ixAnchor;
   // 自動対象は引き継ぐ。再パースで候補から外れた場合は selectEditSeg が入れた既定のまま
-  if (state.edit && auto && autoCandidates(state.edit).includes(auto)) {
+  if (auto && autoCandidates(state.edit).includes(auto)) {
     state.edit.auto = auto;
     renderAssist();
   }
