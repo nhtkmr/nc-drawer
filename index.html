@@ -18,6 +18,8 @@
     --hl: #fff3b0;
     --rapid: #9aa1ab;
     --accent: #e11d48;
+    --time: #0f766e;
+    --time-wait: #b45309;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -33,6 +35,8 @@
       --hl: #4a4320;
       --rapid: #667085;
       --accent: #f43f5e;
+      --time: #2dd4bf;
+      --time-wait: #fbbf24;
     }
   }
   * { box-sizing: border-box; }
@@ -122,6 +126,53 @@
   .assist button:disabled { opacity: .45; cursor: default; }
   .assist button.pri { border-color: var(--accent); color: var(--accent); }
   .assist button.pri:disabled { border-color: var(--border); color: var(--text); }
+  .time { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px;
+    max-height: 42vh; overflow-y: auto; display: none; }
+  .time.on { display: block; }
+  .time .thead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .time .thead .tot { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .time .thead .lab { color: var(--muted); font-size: 11px; }
+  .time .trow { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .time .trow .nm { flex: 1; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .time .trow .sec { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .time .trow.sum { border-top: 1px solid var(--border); margin-top: 5px; padding-top: 5px; font-weight: 600; }
+  .time .trow.sum .sec { color: var(--text); }
+  .time .cnt { color: var(--muted); font-size: 10px; }
+  .time .sub { color: var(--muted); font-size: 11px; margin: 6px 0 2px; }
+  .time .tools { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .time .tools span { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+  .time .tools i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .time .warn { color: var(--time-wait); font-size: 11px; margin: 3px 0; line-height: 1.4; }
+  .time .btns { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
+  .time button { font-size: 11px; padding: 2px 7px; }
+  .time code { background: var(--grid); border-radius: 3px; padding: 0 3px; }
+  dialog#timeCfg {
+    border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text);
+    padding: 0; width: 520px; max-width: 92vw; max-height: 88vh; font-size: 12px;
+  }
+  dialog#timeCfg::backdrop { background: rgba(0,0,0,.45); }
+  .cfg-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px; }
+  .cfg-head .sp { flex: 1; }
+  .cfg-body { padding: 10px 14px; overflow-y: auto; max-height: 66vh; }
+  .cfg-body h4 { margin: 12px 0 5px; font-size: 12px; color: var(--accent); font-weight: 600; }
+  .cfg-body h4:first-child { margin-top: 0; }
+  .cfg-row { display: flex; align-items: center; gap: 7px; margin: 4px 0; }
+  .cfg-row .lab { flex: 1; }
+  .cfg-row .unit { color: var(--muted); width: 52px; flex: none; }
+  .cfg-row input[type=number], .cfg-row input[type=text] {
+    width: 82px; font: inherit; font-size: 12px; padding: 2px 5px; text-align: right;
+    background: var(--canvas-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+  .cfg-row select { font: inherit; font-size: 12px; padding: 2px 4px;
+    background: var(--canvas-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+  .cfg-note { color: var(--muted); font-size: 11px; margin: 2px 0 6px; line-height: 1.4; }
+  .cfg-foot { display: flex; gap: 6px; padding: 9px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .cfg-foot .sp { flex: 1; }
+  .mtab { display: flex; flex-wrap: wrap; gap: 5px; }
+  .mtab .mrow { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 3px 1px 6px; }
+  .mtab .mrow input { width: 52px; }
+  .mtab .mrow button { padding: 0 5px; line-height: 1.4; border: none; background: none; color: var(--muted); }
   .swatch { width: 22px; height: 3px; border-radius: 2px; flex: none; }
   .dash { background: repeating-linear-gradient(90deg, var(--rapid) 0 4px, transparent 4px 7px); height: 0; border-top: 2px dashed var(--rapid); }
   .hint { color: var(--muted); font-size: 11px; }
@@ -149,9 +200,11 @@
     <label><input type="checkbox" id="showLabels" checked> ラベル</label>
     <label><input type="checkbox" id="showDir"> 方向</label>
     <label><input type="checkbox" id="flipArc"> 円弧向き反転</label>
+    <label><input type="checkbox" id="showTime"> 加工時間</label>
     <label><input type="checkbox" id="editMode"> 座標アシスト</label>
     <label><input type="checkbox" id="ixMode"> 交点測定</label>
     <button id="ixClear">交点クリア</button>
+    <button id="timeCfgBtn" title="早送り速度・工具交換時間などの機械設定">&#9881; 時間設定</button>
     <span class="hint" id="ixHint">ホイール=ズーム / ドラッグ=移動</span>
   </div>
 </header>
@@ -162,7 +215,7 @@
   <button id="btnStepFwd" title="次のブロック">▶|</button>
   <input type="range" id="seek" min="0" max="1000" value="1000" class="seek">
   <span class="hint" id="playInfo">全表示</span>
-  <label class="spd">速度 <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1"></label>
+  <label class="spd">速度 <input type="range" id="speed" min="0.1" max="30" step="0.1" value="1"><span id="speedVal">&times;1.0</span></label>
 </div>
 <div class="main">
   <div class="canvas-wrap" id="canvasWrap">
@@ -178,9 +231,28 @@
     <div class="side-head"><span id="fileName">（未読み込み）</span><span class="hint" id="segCount"></span></div>
     <div class="src" id="src"></div>
     <div class="assist" id="assist"></div>
+    <div class="time" id="timePanel"></div>
     <div class="legend" id="legend"></div>
   </div>
 </div>
+
+<dialog id="timeCfg">
+  <div class="cfg-head">
+    <span>加工時間の設定</span>
+    <select id="cfgPreset"></select>
+    <button id="cfgNew" title="現在の設定を複製して新しい機械を作る">複製</button>
+    <button id="cfgRename">名前</button>
+    <button id="cfgDel">削除</button>
+    <span class="sp"></span>
+    <button id="cfgClose">閉じる</button>
+  </div>
+  <div class="cfg-body" id="cfgBody"></div>
+  <div class="cfg-foot">
+    <button id="cfgReset">この機械を既定値に戻す</button>
+    <span class="sp"></span>
+    <span class="hint" id="cfgSaved">localStorage に自動保存</span>
+  </div>
+</dialog>
 
 <script>
 "use strict";
@@ -199,13 +271,59 @@ const TOOL_COLORS = {
 };
 function toolColor(t) { return TOOL_COLORS[t] ?? "#8a8f98"; }
 
+// ===== 加工時間の設定（機械プリセット） =====
+// 早送り速度や工具交換時間は機械ごとに違うので、名前付きプリセットとして
+// localStorage に持たせる。複数台を扱うときはプリセットを切り替える。
+const CFG_KEY = "ncdrawer.machines";
+const DEFAULT_CFG = {
+  rapidX: 20, rapidZ: 24,              // 早送り [m/min]（X は「半径」移動量で評価する）
+  spindleMax: 3000,                    // G50 S 指定が無いときの主軸最高回転 [rpm]
+  defaultFeedMode: 99,                 // プログラムに G98/G99 が無いときの既定
+  defaultCssMode: 97,                  // 同 G96/G97
+  defaultRpm: 1500,                    // G97 で S が無いときの回転数 [rpm]
+  defaultCss: 200,                     // G96 で S が無いときの周速 [m/min]
+  defaultFeed: 0.2,                    // F が無いときの送り
+  toolChangeSec: 2.0,                  // 工具交換（タレット割出し）1回あたり
+  turretStations: 0, turretStepSec: 0, // >0 なら最短回りの段数×秒を上乗せ
+  g28Sec: 1.5,                         // G28 原点復帰 1回あたり
+  spindleAccelSec: 2.0,                // 0 ⇔ 最高回転 の加減速にかかる時間
+  spindleThreshold: 500,               // これ未満の回転数変化は送りと重なるとみなし無視 [rpm]
+  m0Sec: 0,                            // M0 プログラムストップ
+  m1Enabled: false, m1Sec: 0,          // M1 オプショナルストップ（既定は素通り）
+  mTable: {},                          // { "66": 1.5, ... } Mコード別の待ち時間 [秒]
+  minBlockSec: 0,                      // 1ブロックの最小処理時間（先読み・サーボ応答の下限）
+  factorCut: 1.0, factorRapid: 1.0,    // 実機に合わせ込む補正係数
+};
+// 時間の扱いを個別に決めているMコード（Mコード表の対象外）
+const M_HANDLED = new Set([0, 1, 2, 3, 4, 5, 30, 98, 99]);
+
+function newMachines() { return { active: 0, presets: [{ name: "既定", cfg: Object.assign({}, DEFAULT_CFG) }] }; }
+function loadMachines() {
+  try {
+    const m = JSON.parse(localStorage.getItem(CFG_KEY) || "null");
+    if (!m || !Array.isArray(m.presets) || !m.presets.length) return newMachines();
+    // 保存後に増えた設定項目は既定値で補う
+    for (const pr of m.presets) pr.cfg = Object.assign({}, DEFAULT_CFG, pr.cfg || {});
+    m.active = Math.max(0, Math.min(m.presets.length - 1, m.active | 0));
+    return m;
+  } catch (e) { return newMachines(); }
+}
+function saveMachines() { try { localStorage.setItem(CFG_KEY, JSON.stringify(machines)); } catch (e) {} }
+let machines = loadMachines();
+function tcfg() { return machines.presets[machines.active].cfg; }
+function flipOn() { return document.getElementById("flipArc").checked; }
+
 // ===== パーサ =====
 // 非切削G指令（これらを含む行は移動描画をスキップ、または位置設定のみ）
 // origins: { toolStation: {x(直径), z} } 工具切替時にその原位置からアプローチを描く
-function parseNc(text, origins) {
+function parseNc(text, origins, cfg, flip) {
   origins = origins || {};
+  cfg = cfg || DEFAULT_CFG;
   const segs = [];
+  const events = [];          // 移動を伴わないが時間のかかる行（ドウェル・工具交換・待ち）
   const toolsSeen = new Set();
+  const mSeen = new Set();    // プログラムに現れた、Mコード表に未登録のMコード
+  const warn = new Set();
   const rawLines = text.split(/\r?\n/);
 
   let motion = 0;      // モーダル 0/1/2/3
@@ -213,6 +331,16 @@ function parseNc(text, origins) {
   let tool = 0;
   let feed = 0;        // モーダル送り速度
   let posKnown = false;
+
+  // --- 時間計算のためのモーダル状態 ---
+  let sVal = 0;                       // S指令値（G97:rpm / G96:周速 m/min）
+  let cssMode = cfg.defaultCssMode;   // 96=周速一定 / 97=回転数一定
+  let sMax = null;                    // G50 S___ による主軸最高回転クランプ
+  let feedMode = cfg.defaultFeedMode; // 98=mm/min / 99=mm/rev
+  let feedModeSeen = false;
+  let heldRpm = null;  // G96→G97 をS無しで切ったとき、直前の回転数を保持する
+  let spindleOn = false;
+  let curRpm = 0;      // 現在の実効回転数（主軸加減速の判定に使う）
 
   for (let i = 0; i < rawLines.length; i++) {
     const lineNo = i + 1;
@@ -231,33 +359,78 @@ function parseNc(text, origins) {
     }
     if (!words.length) continue;
 
-    // Gコードを収集
+    // Gコード / Mコードを収集
     const gcodes = words.filter(w => w.letter === "G").map(w => w.value);
+    const mcodes = words.filter(w => w.letter === "M").map(w => Math.abs(Math.round(w.value)));
     const isDwell = gcodes.includes(4);
     const isG28 = gcodes.includes(28);
     const isG50 = gcodes.includes(50);
-    // モーダル motion を更新（G0-G3 のみ）
+    if (gcodes.includes(20)) warn.add("G20（インチ指令）は未対応です。時間はミリ指令として計算しています。");
+    const cssBefore = cssMode;
+    const rpmBefore = curRpm;
+    // モーダル motion を更新（G0-G3 のみ）／周速モード・送りモードも拾う
     for (const g of gcodes) {
       if (g === 0 || g === 1 || g === 2 || g === 3) motion = g;
+      else if (g === 96 || g === 97) cssMode = g;
+      else if (g === 98 || g === 99) { feedMode = g; feedModeSeen = true; }
     }
 
     // 送り速度更新
     for (const w of words) if (w.letter === "F") feed = w.value;
 
-    // 工具更新（ステーションが変化したら原位置へリセット）
+    // S語: G50 と同じ行なら主軸最高回転のクランプ、それ以外は主軸指令
+    const hasSpindleS = !isG50 && words.some(w => w.letter === "S");
+    let spindleCmd = cssMode !== cssBefore;
     for (const w of words) {
-      if (w.letter === "T") {
-        const v = Math.abs(Math.round(w.value));
-        const st = v >= 100 ? Math.floor(v / 100) : v;
-        if (st !== tool) {
-          tool = st;
-          const o = origins[tool];
-          if (o && isFinite(o.x) && isFinite(o.z)) {
-            // 原位置から次の移動をアプローチとして描くため位置を確定
-            x = o.x; z = o.z; posKnown = true;
-          }
-        }
+      if (w.letter !== "S") continue;
+      if (isG50) sMax = w.value;
+      else { sVal = w.value; heldRpm = null; spindleCmd = true; }
+    }
+    // G96→G97 をS無しで切り替えた場合、実機は直前の回転数を保持する
+    if (cssMode === 97 && cssBefore === 96 && !hasSpindleS) heldRpm = rpmBefore || null;
+    for (const mc of mcodes) {
+      if (mc === 3 || mc === 4) { spindleOn = true; spindleCmd = true; }
+      else if (mc === 5) { spindleOn = false; spindleCmd = true; }
+    }
+
+    // 工具更新（ステーションが変化したら原位置へリセット＋工具交換イベント）
+    for (const w of words) {
+      if (w.letter !== "T") continue;
+      const v = Math.abs(Math.round(w.value));
+      const st = v >= 100 ? Math.floor(v / 100) : v;
+      if (st === tool) continue;
+      const prev = tool;
+      tool = st;
+      // T00 は工具キャンセルであって割出しではないので時間に数えない
+      if (st >= 1) events.push({ line: lineNo, kind: "toolchange", tool: st,
+        sec: toolChangeSec(prev, st, cfg), label: (prev ? "T" + prev : "－") + "→T" + st });
+      const o = origins[tool];
+      if (o && isFinite(o.x) && isFinite(o.z)) {
+        // 原位置から次の移動をアプローチとして描くため位置を確定
+        x = o.x; z = o.z; posKnown = true;
       }
+    }
+
+    // 主軸加減速：指令のあった行だけ、その時点の径での回転数差から見積もる。
+    // （G96で切削中に径が変わって回転数が動く分は送りと重なるので数えない）
+    curRpm = spindleOn ? rpmAt(x, { sVal, cssMode, sMax, heldRpm }, cfg) : 0;
+    if (spindleCmd && cfg.spindleAccelSec > 0 && cfg.spindleMax > 0) {
+      const dr = Math.abs(curRpm - rpmBefore);
+      if (dr >= cfg.spindleThreshold) {
+        events.push({ line: lineNo, kind: "spindle", tool,
+          sec: dr / (cfg.spindleMax / cfg.spindleAccelSec),
+          label: "主軸 " + Math.round(rpmBefore) + "→" + Math.round(curRpm) + "rpm" });
+      }
+    }
+
+    // M停止 / Mコード別の待ち時間
+    for (const mc of mcodes) {
+      if (mc === 0) { events.push({ line: lineNo, kind: "mstop", tool, sec: cfg.m0Sec, label: "M0 プログラムストップ" }); continue; }
+      if (mc === 1) { if (cfg.m1Enabled) events.push({ line: lineNo, kind: "mstop", tool, sec: cfg.m1Sec, label: "M1 オプショナルストップ" }); continue; }
+      if (M_HANDLED.has(mc)) continue;
+      mSeen.add(mc);
+      const sec = +cfg.mTable[mc] || 0;
+      if (sec > 0) events.push({ line: lineNo, kind: "mcode", tool, sec, label: "M" + mc });
     }
 
     // 座標語を収集（motionで使う候補）
@@ -274,9 +447,21 @@ function parseNc(text, origins) {
       }
     }
 
-    // ドウェル(G4)/原点復帰(G28)行は移動として扱わない
-    if (isDwell) continue;
-    if (isG28) { posKnown = false; continue; }
+    // ドウェル(G4)：X/U/W は秒、P は 1/1000秒。移動としては扱わない
+    if (isDwell) {
+      let sec = 0;
+      for (const w of words) {
+        if (w.letter === "X" || w.letter === "U" || w.letter === "W") sec = Math.abs(w.value);
+        else if (w.letter === "P") sec = Math.abs(w.value) / 1000;
+      }
+      events.push({ line: lineNo, kind: "dwell", tool, sec, label: "G4 ドウェル" });
+      continue;
+    }
+    // 原点復帰(G28)：機械原点の座標は不明なので固定時間で見積もる
+    if (isG28) {
+      if (cfg.g28Sec > 0) events.push({ line: lineNo, kind: "g28", tool, sec: cfg.g28Sec, label: "G28 原点復帰" });
+      posKnown = false; continue;
+    }
 
     if (!hasMove) continue;
 
@@ -295,31 +480,42 @@ function parseNc(text, origins) {
       x0: x, z0: z, x1: nx, z1: nz,
       r: (motion === 2 || motion === 3) ? rArc : null,
       line: lineNo,
+      sVal, cssMode, sMax, feedMode, heldRpm,   // 時間計算用のモーダル状態を凍結
     };
     segs.push(seg);
     toolsSeen.add(tool);
     x = nx; z = nz;
   }
 
-  // 再生用の所要時間を算出（早送りは速く）
-  const RAPID_SPEED = 12;   // 早送り相当の速さ（大きいほど速い）
-  let totalT = 0;
-  const cumT = [0];
-  for (const s of segs) {
-    const len = segLength(s);
-    const spd = s.type === 0 ? RAPID_SPEED : Math.max(s.feed || 0.2, 0.02);
-    s.dur = Math.max(len / spd, 1e-4);
-    totalT += s.dur;
-    cumT.push(totalT);
-  }
+  if (!feedModeSeen) warn.add("G98/G99 の指定がありません。既定（G" + cfg.defaultFeedMode + "）で計算しています。");
+  if (segs.some(sg => sg.type !== 0 && !(sg.feed > 0))) warn.add("送り(F)の無い切削ブロックがあります。既定 F" + cfg.defaultFeed + " で計算しています。");
 
-  return { segs, tools: [...toolsSeen].sort((a, b) => a - b), rawLines, cumT, totalT: totalT || 1 };
+  const d = {
+    segs, events, tools: [...toolsSeen].sort((a, b) => a - b), rawLines,
+    mSeen: [...mSeen].sort((a, b) => a - b), warn: [...warn],
+  };
+  computeTimes(d, cfg, flip);
+  return d;
 }
 
-// セグメントの幾何長（(z, r)平面、r=x/2）
-function segLength(s) {
+// 工具交換（タレット割出し）1回の時間。段数比例を設定していればその分を上乗せする
+function toolChangeSec(from, to, cfg) {
+  let sec = cfg.toolChangeSec;
+  const n = cfg.turretStations | 0;
+  if (n > 1 && cfg.turretStepSec > 0 && from >= 1 && to >= 1) {
+    const diff = Math.abs(to - from) % n;
+    sec += Math.min(diff, n - diff) * cfg.turretStepSec;   // 最短回り
+  }
+  return Math.max(0, sec);
+}
+
+// 円弧の向き。省略時は画面のトグルに従う（時間計算からは明示的に渡す）
+function arcFlip(flip) { return flip === undefined ? flipOn() : !!flip; }
+
+// セグメントの幾何長（(z, r)平面、r=x/2）＝工具が実際に動く距離
+function segLength(s, flip) {
   if (s.type === 2 || s.type === 3) {
-    const ap = arcParams(s, false);
+    const ap = arcParams(s, arcFlip(flip));
     if (ap) {
       let sweep = ap.a1 - ap.a0;
       if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; } else { while (sweep < 0) sweep += 2 * Math.PI; }
@@ -327,6 +523,137 @@ function segLength(s) {
     }
   }
   return Math.hypot(s.z1 - s.z0, (s.x1 - s.x0) / 2);
+}
+
+// ===== 加工時間の計算 =====
+// 旋盤なので「送り＝F×主軸回転数」であり、G96(周速一定)では回転数が径で変わる。
+// したがって径の変わる線は径に沿って積分しないと正しい時間にならない。
+
+// 直径 d [mm] における実効回転数 [rpm]。md は {sVal, cssMode, sMax, heldRpm}
+function rpmAt(d, md, cfg) {
+  const smax = (md.sMax > 0) ? md.sMax : cfg.spindleMax;
+  if (md.cssMode !== 96) {
+    // G97: S をそのまま回転数として使う（G96から S 無しで抜けた場合は保持値）
+    const r = md.heldRpm > 0 ? md.heldRpm : (md.sVal > 0 ? md.sVal : cfg.defaultRpm);
+    return Math.min(r, smax);
+  }
+  // G96: rpm = 1000·S / (π·D)。D→0 で発散するので必ず最高回転でクランプする
+  const s = md.sVal > 0 ? md.sVal : cfg.defaultCss;
+  const dd = Math.abs(d);
+  return dd > 1e-6 ? Math.min(1000 * s / (Math.PI * dd), smax) : smax;
+}
+
+// G96+毎回転送りの直線。径 D は弧長に対し線形なので解析的に解ける。
+//   t[min] = K·∫D ds   （クランプが効かない範囲）
+//   t[min] = CL·ΔL     （回転数が最高回転に張り付いた範囲）
+// クランプ径 Dc をまたぐ線は 2 区間に割る。
+function cssLineMinutes(d0, d1, len, dc, K, CL) {
+  d0 = Math.abs(d0); d1 = Math.abs(d1);
+  if (len <= 0) return 0;
+  if (Math.min(d0, d1) >= dc) return K * len * (d0 + d1) / 2;   // 全域クランプなし
+  if (Math.max(d0, d1) <= dc) return CL * len;                  // 全域クランプ
+  const f = (dc - d0) / (d1 - d0);                              // Dc に達する位置 0..1
+  const l1 = len * f, l2 = len - l1;
+  return (d0 < dc ? CL * l1 : K * l1 * (d0 + dc) / 2)
+       + (d0 < dc ? K * l2 * (dc + d1) / 2 : CL * l2);
+}
+
+// 切削1ブロックの所要秒数（補正係数は掛けない）
+function cutSeconds(seg, len, cfg, flip) {
+  const F = seg.feed > 0 ? seg.feed : cfg.defaultFeed;
+  if (!(F > 0) || len <= 0) return 0;
+  if (seg.feedMode === 98) return len / F * 60;                 // G98: F は mm/min
+  const smax = (seg.sMax > 0) ? seg.sMax : cfg.spindleMax;
+  if (seg.cssMode !== 96) return len / (F * rpmAt(0, seg, cfg)) * 60;   // G97: 回転数一定
+  const S = seg.sVal > 0 ? seg.sVal : cfg.defaultCss;
+  const dc = 1000 * S / (Math.PI * smax);   // これ未満の径では最高回転に張り付く
+  const K = Math.PI / (1000 * F * S);
+  const CL = 1 / (F * smax);
+  if (seg.type !== 2 && seg.type !== 3) return cssLineMinutes(seg.x0, seg.x1, len, dc, K, CL) * 60;
+  // 円弧は径が弧長に対し非線形なので分割して台形和
+  const N = 64;
+  let minutes = 0, prev = segPointAt(seg, 0, flip);
+  for (let k = 1; k <= N; k++) {
+    const cur = segPointAt(seg, k / N, flip);
+    const dl = Math.hypot(cur.z - prev.z, cur.r - prev.r);
+    const dm = prev.r + cur.r;              // 区間の平均直径（r=D/2 なので r0+r1）
+    minutes += dm >= dc ? K * dl * dm : CL * dl;
+    prev = cur;
+  }
+  return minutes * 60;
+}
+
+// 早送りは各軸が独立に最高速で動くので、遅い方の軸で時間が決まる
+function rapidSeconds(seg, cfg) {
+  const dr = Math.abs(seg.x1 - seg.x0) / 2;   // X軸の実移動は「半径」量
+  const dz = Math.abs(seg.z1 - seg.z0);
+  const vx = cfg.rapidX > 0 ? cfg.rapidX : DEFAULT_CFG.rapidX;
+  const vz = cfg.rapidZ > 0 ? cfg.rapidZ : DEFAULT_CFG.rapidZ;
+  // 速度は m/min、距離は mm → 秒 = mm / (m/min × 1000) × 60
+  return Math.max(dr / vx, dz / vz) * 0.06;
+}
+
+// セグメント・イベントに秒数を入れ、実行順のタイムライン steps を組む
+function computeTimes(d, cfg, flip) {
+  for (const s of d.segs) {
+    s.len = segLength(s, flip);
+    s.est = s.type !== 0 && !(s.feed > 0);
+    if (s.type === 0) {
+      s.sec = rapidSeconds(s, cfg) * cfg.factorRapid;
+      s.rpm0 = s.rpm1 = null; s.feedMMPM = null;
+      s.cat = "rapid";
+    } else {
+      s.sec = cutSeconds(s, s.len, cfg, flip) * cfg.factorCut;
+      s.rpm0 = rpmAt(s.x0, s, cfg);
+      s.rpm1 = rpmAt(s.x1, s, cfg);
+      const F = s.feed > 0 ? s.feed : cfg.defaultFeed;
+      s.feedMMPM = s.feedMode === 98 ? F : F * (s.rpm0 + s.rpm1) / 2;
+      s.cat = (s.type === 2 || s.type === 3) ? "arc" : "cut";
+    }
+    if (cfg.minBlockSec > 0) s.sec = Math.max(s.sec, cfg.minBlockSec);
+  }
+  for (const e of d.events) {
+    e.cat = e.kind === "dwell" ? "dwell" : (e.kind === "toolchange" ? "tool" : "aux");
+  }
+
+  // 実行順にマージ。同じ行ならイベントが先（工具割出しや主軸待ちは移動の前に起きる）
+  const steps = [];
+  let ei = 0;
+  for (const seg of d.segs) {
+    while (ei < d.events.length && d.events[ei].line <= seg.line) steps.push({ kind: "wait", evt: d.events[ei++] });
+    steps.push({ kind: "move", seg });
+  }
+  while (ei < d.events.length) steps.push({ kind: "wait", evt: d.events[ei++] });
+  d.steps = steps;
+
+  // 再生用の時間軸。長さ0のブロックで割り算が壊れないよう最小値を入れる
+  const cumT = [0];
+  let t = 0;
+  d.doneBefore = new Array(steps.length);   // step i より前に完了しているセグメント数
+  d.segStepIdx = new Array(d.segs.length);  // セグメント k に対応する step 番号
+  let mc = 0;
+  for (let i = 0; i < steps.length; i++) {
+    d.doneBefore[i] = mc;
+    if (steps[i].kind === "move") d.segStepIdx[mc++] = i;
+    t += Math.max(steps[i].kind === "move" ? steps[i].seg.sec : steps[i].evt.sec, 1e-4);
+    cumT.push(t);
+  }
+  d.cumT = cumT;
+  d.totalT = t || 1;
+
+  // 集計（種別トグルは合計の出し方だけを変える。再生は常に全体の実時間で動く）
+  d.sum = { cut: 0, arc: 0, rapid: 0, dwell: 0, tool: 0, aux: 0 };
+  d.cnt = { cut: 0, arc: 0, rapid: 0, dwell: 0, tool: 0, aux: 0 };
+  for (const sg of d.segs) { d.sum[sg.cat] += sg.sec; d.cnt[sg.cat]++; }
+  for (const e of d.events) { d.sum[e.cat] += e.sec; d.cnt[e.cat]++; }
+}
+
+// 秒 → "2:41" / "0:03.4"（1分未満は小数1桁まで出す）
+function fmtSec(v) {
+  if (!isFinite(v) || v < 0) v = 0;
+  const mm = Math.floor(v / 60), ss = v - mm * 60;
+  if (mm === 0) return ss.toFixed(ss < 10 ? 2 : 1) + "s";
+  return mm + ":" + (ss < 10 ? "0" : "") + ss.toFixed(1);
 }
 
 // ===== 状態 =====
@@ -348,6 +675,10 @@ let state = {
   // 座標アシスト
   editLine: null,     // 選択中セグメントの行番号（reparseを跨いで生き残る識別子）
   edit: null,         // { x1, z1, ang, r, auto:"x1"|"z1"|"ang", err }
+  // 加工時間
+  timeCats: { cut: true, arc: true, rapid: true, dwell: true, tool: true, aux: true },
+  timeHidden: new Set(),  // ラベルを個別に消した行番号（reparseを跨いで残す）
+  labelMode: false,       // クリックでラベルを個別トグルするモード
 };
 
 // 座標アシストの編集履歴（プログラムは小さいので全文スナップショットで十分）
@@ -452,6 +783,7 @@ function draw() {
   const colCenter = css.getPropertyValue("--center").trim();
   const colRapid = css.getPropertyValue("--rapid").trim();
   const colMuted = css.getPropertyValue("--muted").trim();
+  const colWait = css.getPropertyValue("--time-wait").trim();
 
   ctx.clearRect(0, 0, w, h);
   if (!d) return;
@@ -503,7 +835,7 @@ function draw() {
   for (let i = 0; i < d.segs.length; i++) {
     const s = d.segs[i];
     if (playActive && i > play.idx) continue; // 再生位置より先は未描画
-    const partial = playActive && i === play.idx;
+    const partial = playActive && i === play.idx && !play.waiting;
     const isRapid = s.type === 0;
     if (isRapid && !showRapid) continue;
     const hovered = state.hoverSeg === s;
@@ -560,6 +892,15 @@ function draw() {
       drawArrowHead(px, py, worldAngToScreen(p.ang, sign), toolColor(s.tool), 9);
     }
     ctx.restore();
+    // ドウェル・工具交換などで止まっている間は、何を待っているかを出す
+    if (play.waiting) {
+      ctx.save();
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      labelBox(wx(p.z) + 12, wy(p.r) - 14,
+        "\u23f1 " + play.waiting.label + " " + fmtSec(play.waiting.sec), colWait, null);
+      ctx.restore();
+    }
   }
 
   // ホバー点の強調
@@ -576,6 +917,9 @@ function draw() {
     }
     ctx.restore();
   }
+
+  // --- 加工時間ラベル ---
+  drawTimeLabels(play, playActive);
 
   // --- 交点測定 ---
   drawIntersections(colMuted);
@@ -696,6 +1040,89 @@ function drawEditPreview() {
 }
 
 // 交点測定の描画：選択中の1本目ハイライト＋確定した交点の延長線・マーカー・座標
+// 背景を塗った枠付きラベル。boxes を渡すと既存のラベルと重なる位置は描かない
+function labelBox(px, py, text, color, boxes) {
+  const tw = ctx.measureText(text).width;
+  const b = [px - 3, py - 8, tw + 6, 17];
+  if (boxes) {
+    for (const o of boxes) {
+      if (b[0] < o[0] + o[2] && b[0] + b[2] > o[0] && b[1] < o[1] + o[3] && b[1] + b[3] > o[1]) return false;
+    }
+    boxes.push(b);
+  }
+  const css = getComputedStyle(document.documentElement);
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = css.getPropertyValue("--panel").trim();
+  ctx.fillRect(b[0], b[1], b[2], b[3]);
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = color;
+  ctx.strokeRect(b[0] + 0.5, b[1] + 0.5, b[2] - 1, b[3] - 1);
+  ctx.fillStyle = color;
+  ctx.fillText(text, px, py);
+  ctx.restore();
+  return true;
+}
+
+// このセグメントのラベルを図に出すか（種別トグル＋行ごとの個別指定）
+function timeLabelVisible(s) {
+  return state.timeCats[s.cat] && !state.timeHidden.has(s.line);
+}
+
+// --- 各ブロックの所要時間を図に焼き込む ---
+// 重なるラベルは描かないので、画面上で短い線は自然に省かれる（ズームすれば出る）
+function drawTimeLabels(play, playActive) {
+  if (!document.getElementById("showTime").checked) return;
+  const d = state.data;
+  if (!d) return;
+  const showRapid = document.getElementById("showRapid").checked;
+  const css = getComputedStyle(document.documentElement);
+  const colTime = css.getPropertyValue("--time").trim();
+  const colWait = css.getPropertyValue("--time-wait").trim();
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const boxes = [];
+  ctx.save();
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+
+  // 待ち（ドウェル・工具交換など）は直前のセグメント終点に付ける
+  const endOf = new Map();   // 行番号 → その行までに到達している点
+  let last = null;
+  for (const st of d.steps) {
+    if (st.kind === "move") { last = st.seg; continue; }
+    if (last) endOf.set(st.evt, { z: last.z1, r: last.x1 / 2 });
+  }
+
+  // 待ち（ドウェル・工具交換など）を先に描く。細かい移動ラベルより情報量が多いので優先させる
+  const upto = playActive ? play.stepIdx : d.steps.length - 1;
+  for (let i = 0; i <= upto; i++) {
+    const st = d.steps[i];
+    if (st.kind !== "wait") continue;
+    const e = st.evt;
+    if (!state.timeCats[e.cat] || state.timeHidden.has(e.line) || !(e.sec > 0)) continue;
+    if (playActive && play.waiting === e) continue;   // 再生中の待ちは先端バッジで出している
+    const at = endOf.get(e);
+    if (!at) continue;
+    const px = wx(at.z) + 7, py = wy(at.r) + 11;
+    if (px < -100 || px > w + 100 || py < -20 || py > h + 20) continue;
+    labelBox(px, py, e.label + " " + fmtSec(e.sec), colWait, boxes);
+  }
+  for (let i = 0; i <= upto; i++) {
+    const st = d.steps[i];
+    if (st.kind !== "move") continue;
+    const sg = st.seg;
+    if (sg.type === 0 && !showRapid) continue;
+    if (!timeLabelVisible(sg)) continue;
+    const mid = segPointAt(sg, 0.5);
+    const px = wx(mid.z) + 7, py = wy(mid.r) - 9;
+    if (px < -60 || px > w + 60 || py < -20 || py > h + 20) continue;
+    labelBox(px, py, fmtSec(sg.sec) + (sg.est ? " ?" : ""), colTime, boxes);
+  }
+  ctx.restore();
+}
+
 function drawIntersections(colMuted) {
   // 選択中の1本目を強調
   if (state.ixFirst) {
@@ -787,27 +1214,32 @@ function drawArcPolyline(ap, sign) {
   ctx.stroke();
 }
 
-// playhead(0..1) → { idx, t }（idx=セグメント番号, t=そのセグメント内の割合0..1）
+// playhead(0..1) → { idx, t, waiting, stepIdx }
+//   idx     … 描き終えるべき最後のセグメント番号（-1 = まだ1本も描かない）
+//   t       … そのセグメント内の割合 0..1
+//   waiting … 待ち（ドウェル・工具交換など）の最中ならそのイベント
+// 時間軸は移動と待ちを実行順に並べた steps。ドウェル中は先端が止まる。
 function playAt(p) {
   const d = state.data;
-  if (!d || !d.segs.length) return { idx: -1, t: 0 };
-  const target = p * d.totalT;
-  if (p >= 1) return { idx: d.segs.length - 1, t: 1 };
-  if (p <= 0) return { idx: 0, t: 0 };
-  // cumT は長さ segs+1
-  for (let i = 0; i < d.segs.length; i++) {
-    if (target < d.cumT[i + 1] || i === d.segs.length - 1) {
-      const local = (target - d.cumT[i]) / (d.cumT[i + 1] - d.cumT[i]);
-      return { idx: i, t: Math.max(0, Math.min(1, local)) };
-    }
+  if (!d || !d.steps || !d.steps.length) return { idx: -1, t: 0, waiting: null, stepIdx: -1 };
+  if (p >= 1) return { idx: d.segs.length - 1, t: 1, waiting: null, stepIdx: d.steps.length - 1 };
+  const target = Math.max(0, p) * d.totalT;
+  let si = d.steps.length - 1;
+  for (let i = 0; i < d.steps.length; i++) {
+    if (target < d.cumT[i + 1]) { si = i; break; }
   }
-  return { idx: d.segs.length - 1, t: 1 };
+  const st = d.steps[si];
+  const done = d.doneBefore[si];
+  if (st.kind === "wait") return { idx: done - 1, t: 1, waiting: st.evt, stepIdx: si };
+  const span = d.cumT[si + 1] - d.cumT[si];
+  const local = span > 0 ? (target - d.cumT[si]) / span : 0;
+  return { idx: done, t: Math.max(0, Math.min(1, local)), waiting: null, stepIdx: si };
 }
 
 // セグメント上の点（ワールド (z, r)）。r は上半分（r=x/2）。t=0..1
-function segPointAt(s, t) {
+function segPointAt(s, t, flip) {
   if (s.type === 2 || s.type === 3) {
-    const ap = arcParams(s, document.getElementById("flipArc").checked);
+    const ap = arcParams(s, arcFlip(flip));
     if (ap) {
       let sweep = ap.a1 - ap.a0;
       if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; } else { while (sweep < 0) sweep += 2 * Math.PI; }
@@ -826,7 +1258,7 @@ function segPointAt(s, t) {
 function drawSegPartial(s, upto, sign) {
   ctx.beginPath();
   if (s.type === 2 || s.type === 3) {
-    const ap = arcParams(s, document.getElementById("flipArc").checked);
+    const ap = arcParams(s, flipOn());
     if (ap) {
       let sweep = ap.a1 - ap.a0;
       if (ap.cw) { while (sweep > 0) sweep -= 2 * Math.PI; } else { while (sweep < 0) sweep += 2 * Math.PI; }
@@ -932,7 +1364,7 @@ function hitTest(px, py) {
       // 直線近似（円弧も端点間の折れ線サンプルで近似）
       let pts;
       if (s.type === 2 || s.type === 3) {
-        const ap = arcParams(s, document.getElementById("flipArc").checked);
+        const ap = arcParams(s, flipOn());
         pts = [];
         if (ap) {
           let sweep = ap.a1 - ap.a0;
@@ -1239,7 +1671,8 @@ function showTooltip(s, clientX, clientY) {
     `始: ⌀${fmt(s.x0)} Z${fmt(s.z0)}<br>` +
     `終: ⌀${fmt(s.x1)} Z${fmt(s.z1)}` +
     (s.r != null ? `<br>R${fmt(s.r)}` : "") +
-    (ang != null ? `<br>水平から ∠${angStr(ang)}` : "");
+    (ang != null ? `<br>水平から ∠${angStr(ang)}` : "") +
+    timeTip(s);
   let tx = clientX - rect.left + 14, ty = clientY - rect.top + 14;
   if (tx + tooltip.offsetWidth > rect.width) tx = clientX - rect.left - tooltip.offsetWidth - 14;
   if (ty + tooltip.offsetHeight > rect.height) ty = clientY - rect.top - tooltip.offsetHeight - 14;
@@ -1283,6 +1716,7 @@ function ixModeOn() { return document.getElementById("ixMode").checked; }
 function editModeOn() { return document.getElementById("editMode").checked; }
 function setIxHint(msg) { document.getElementById("ixHint").textContent = msg; }
 function updateIxHint() {
+  if (state.labelMode) { setIxHint("線をクリックして時間ラベルをON/OFF"); return; }
   if (editModeOn()) { setIxHint("編集するブロックをクリック（図 または 右のソース行）"); return; }
   if (!ixModeOn()) { setIxHint("ホイール=ズーム / ドラッグ=移動"); return; }
   setIxHint(state.ixFirst ? "2本目のG1線をクリック" : "1本目のG1線をクリック");
@@ -1290,6 +1724,12 @@ function updateIxHint() {
 cv.addEventListener("click", e => {
   if (moved || !state.data) return; // ドラッグは無視
   const r0 = cv.getBoundingClientRect();
+  // 加工時間ラベルの個別ON/OFF（専用モード or Alt+クリック）
+  if (state.labelMode || (e.altKey && showTimeOn())) {
+    const seg = hitTest(e.clientX - r0.left, e.clientY - r0.top);
+    if (seg) { toggleTimeLabel(seg.line); return; }
+    if (state.labelMode) { setIxHint("線が見つかりません（線の近くをクリック）"); return; }
+  }
   if (editModeOn()) {
     const seg = hitTest(e.clientX - r0.left, e.clientY - r0.top);
     if (!seg) { setIxHint("ブロックが見つかりません（線の近くをクリック）"); return; }
@@ -1317,6 +1757,8 @@ cv.addEventListener("click", e => {
   draw();
 });
 window.addEventListener("keydown", e => {
+  // 設定ダイアログが開いている間は、Escape も Ctrl+Z もそちらに任せる
+  if (cfgDlg.open) return;
   if (e.key === "Escape") {
     // 測った交点は編集の足場になるので、まず編集選択だけを解除する。
     // 解除するものが無ければ交点をクリア（全消しは「交点クリア」ボタン）。
@@ -1907,16 +2349,18 @@ function load(text, name) {
   eol = text.includes("\r\n") ? "\r\n" : "\n";  // 元の改行コードを保つ
   undoStack = [];
   origins = {};                 // 新規ファイルでは原位置をクリア
-  state.data = parseNc(text, origins);
+  state.data = parseNc(text, origins, tcfg(), flipOn());
   state.fileName = name;
   state.playhead = 1; state.playing = false;
   state.ixFirst = null; state.ixPoints = [];  // 交点測定をクリア
   state.editLine = null; state.edit = null;   // 座標アシストをクリア
+  state.timeHidden.clear();                   // 時間ラベルの個別指定をクリア
   syncDirty();
   document.getElementById("segCount").textContent = state.data.segs.length + " seg";
   renderSrc();
   renderLegend();
   renderAssist();
+  renderTimePanel();
   fitView();
   syncTransport();
   draw();
@@ -1925,10 +2369,11 @@ function load(text, name) {
 
 // 原位置変更などでビューを保持したまま再パース
 function reparse() {
-  state.data = parseNc(lastText, origins);
+  state.data = parseNc(lastText, origins, tcfg(), flipOn());
   document.getElementById("segCount").textContent = state.data.segs.length + " seg";
   renderSrc();
   reselectAfterReparse();   // 座標アシストの選択・編集値を新しいセグメントに同期
+  renderTimePanel();
   syncTransport();
 }
 
@@ -1940,7 +2385,8 @@ function setPlayhead(p, seekPause) {
   if (seekPause) state.playing = false;
   syncTransport();
   const pl = playAt(state.playhead);
-  const ln = (state.playhead < 1 && pl.idx >= 0) ? state.data.segs[pl.idx].line : null;
+  const ln = state.playhead >= 1 ? null
+    : (pl.waiting ? pl.waiting.line : (pl.idx >= 0 ? state.data.segs[pl.idx].line : null));
   if (ln !== lastHlLine) { highlightSrc(ln); lastHlLine = ln; }
   draw();
 }
@@ -1951,12 +2397,17 @@ function syncTransport() {
   seek.value = Math.round(state.playhead * 1000);
   document.getElementById("btnPlay").textContent = state.playing ? "⏸" : "▶";
   const info = document.getElementById("playInfo");
+  const d = state.data;
+  const el = fmtSec(state.playhead * d.totalT);
   if (state.playhead >= 1 && !state.playing) {
-    info.textContent = "全表示";
+    info.textContent = `全表示  ${fmtSec(d.totalT)}`;
   } else {
     const pl = playAt(state.playhead);
-    const s = state.data.segs[pl.idx];
-    info.textContent = s ? `${pl.idx + 1}/${state.data.segs.length}  行${s.line}` : "";
+    if (pl.waiting) info.textContent = `${el} / ${fmtSec(d.totalT)}  ${pl.waiting.label} ${fmtSec(pl.waiting.sec)}`;
+    else {
+      const s = d.segs[pl.idx];
+      info.textContent = s ? `${el} / ${fmtSec(d.totalT)}  行${s.line}` : el;
+    }
   }
 }
 
@@ -1965,9 +2416,8 @@ function tick(ts) {
   if (!state.playing || !state.data) { rafId = null; return; }
   if (!lastTs) lastTs = ts;
   const dt = (ts - lastTs) / 1000; lastTs = ts;
-  // totalT はワールド長/速度の合計。再生時間 = totalT / (BASE*speed) 秒程度
-  const BASE = 40; // 全体の速さ基準
-  state.playhead += dt * BASE * state.speed / state.data.totalT;
+  // totalT は実秒なので、速度1.0 = 実機と同じ速さで進む
+  state.playhead += dt * state.speed / state.data.totalT;
   if (state.playhead >= 1) {
     state.playhead = 1; state.playing = false;
     syncTransport(); draw(); rafId = null; return;
@@ -1984,13 +2434,16 @@ function play() {
 }
 function pause() { state.playing = false; syncTransport(); }
 function stepSeg(dir) {
-  if (!state.data || !state.data.segs.length) return;
+  const d = state.data;
+  if (!d || !d.segs.length) return;
   const pl = playAt(state.playhead >= 1 ? 1 : state.playhead);
-  let idx = pl.idx + (dir > 0 ? 1 : (pl.t > 0.001 ? 0 : -1));
-  idx = Math.max(0, Math.min(state.data.segs.length - 1, idx));
-  // セグメント idx の終端(dir>0) or 始端 に合わせる
-  const target = dir > 0 ? state.data.cumT[idx + 1] : state.data.cumT[idx];
-  setPlayhead(target / state.data.totalT, true);
+  let idx = pl.idx + (dir > 0 ? 1 : ((pl.t > 0.001 || pl.waiting) ? 0 : -1));
+  if (dir > 0 && idx > d.segs.length - 1) { setPlayhead(1, true); return; }
+  idx = Math.max(0, Math.min(d.segs.length - 1, idx));
+  // セグメント idx の終端(dir>0) or 始端 に合わせる（待ちステップは跨いで進む）
+  const si = d.segStepIdx[idx];
+  const target = dir > 0 ? d.cumT[si + 1] : d.cumT[si];
+  setPlayhead(target / d.totalT, true);
 }
 
 // UI配線
@@ -2003,14 +2456,16 @@ document.getElementById("fileInput").addEventListener("change", e => {
   rd.readAsText(f);
 });
 document.getElementById("resetView").addEventListener("click", () => { fitView(); draw(); });
-for (const id of ["showRapid", "showLabels", "flipArc", "showDir"]) {
+for (const id of ["showRapid", "showLabels", "showDir"]) {
   document.getElementById(id).addEventListener("change", draw);
 }
+// 円弧の向きが変わると弧長＝加工時間も変わるので計算し直す
+document.getElementById("flipArc").addEventListener("change", recalcTime);
 
 // 交点測定 配線
 document.getElementById("ixMode").addEventListener("change", () => {
-  if (ixModeOn()) document.getElementById("editMode").checked = false;
-  cv.style.cursor = (editModeOn() || ixModeOn()) ? "pointer" : "crosshair";
+  if (ixModeOn()) { document.getElementById("editMode").checked = false; state.labelMode = false; renderTimePanel(); }
+  cv.style.cursor = (editModeOn() || ixModeOn() || state.labelMode) ? "pointer" : "crosshair";
   if (!ixModeOn()) state.ixFirst = null;
   updateIxHint();
   draw();
@@ -2021,8 +2476,8 @@ document.getElementById("ixClear").addEventListener("click", () => {
 
 // 座標アシスト 配線（交点測定とは排他）
 document.getElementById("editMode").addEventListener("change", () => {
-  if (editModeOn()) { document.getElementById("ixMode").checked = false; state.ixFirst = null; }
-  cv.style.cursor = (editModeOn() || ixModeOn()) ? "pointer" : "crosshair";
+  if (editModeOn()) { document.getElementById("ixMode").checked = false; state.ixFirst = null; state.labelMode = false; renderTimePanel(); }
+  cv.style.cursor = (editModeOn() || ixModeOn() || state.labelMode) ? "pointer" : "crosshair";
   updateIxHint();
   draw();
 });
@@ -2039,7 +2494,10 @@ document.getElementById("btnRewind").addEventListener("click", () => setPlayhead
 document.getElementById("btnStepFwd").addEventListener("click", () => stepSeg(1));
 document.getElementById("btnStepBack").addEventListener("click", () => stepSeg(-1));
 document.getElementById("seek").addEventListener("input", e => setPlayhead(e.target.value / 1000, true));
-document.getElementById("speed").addEventListener("input", e => { state.speed = parseFloat(e.target.value); });
+document.getElementById("speed").addEventListener("input", e => {
+  state.speed = parseFloat(e.target.value);
+  document.getElementById("speedVal").textContent = "\u00d7" + state.speed.toFixed(1);
+});
 
 // ドラッグ&ドロップ
 const dropHint = document.getElementById("dropHint");
@@ -2056,8 +2514,273 @@ wrap.addEventListener("drop", e => {
 window.addEventListener("resize", resizeCanvas);
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 
+// ===== 加工時間 UI =====
+const CAT_LABEL = {
+  cut: "切削 G1", arc: "円弧 G2/G3", rapid: "早送り G0",
+  dwell: "ドウェル G4", tool: "工具交換", aux: "主軸・停止・M",
+};
+function showTimeOn() { return document.getElementById("showTime").checked; }
+
+// ツールチップに出す長さ・送り・時間。旋盤は「送り＝F×回転数」なので回転数も見せる
+function timeTip(s) {
+  const c = tcfg();
+  let h = `<br>長さ ${fmt(s.len)} ・ <b>${fmtSec(s.sec)}</b>`;
+  if (s.type === 0) return h + `（早送り X${c.rapidX} / Z${c.rapidZ} m/min）`;
+  const F = s.feed > 0 ? s.feed : c.defaultFeed;
+  if (s.feedMode === 98) return h + `<br>F${fmt(F)} mm/min` + (s.est ? " ⚠F既定" : "");
+  const r0 = Math.round(s.rpm0), r1 = Math.round(s.rpm1);
+  const rpm = r0 === r1 ? `${r0}` : `${r0}→${r1}`;
+  h += `<br>F${fmt(F)} mm/rev × ${rpm}rpm ≒ ${Math.round(s.feedMMPM)} mm/min`;
+  const smax = s.sMax > 0 ? s.sMax : c.spindleMax;
+  if (s.cssMode === 96) {
+    h += `<br>G96 S${fmt(s.sVal || c.defaultCss)} m/min`;
+    if (Math.max(r0, r1) >= smax - 0.5) h += `（S${smax}でクランプ）`;
+  } else {
+    h += `<br>G97 ${Math.round(rpmAt(0, s, c))} rpm`;
+  }
+  if (s.est) h += " ⚠F既定";
+  return h;
+}
+
+function renderTimePanel() {
+  const el = document.getElementById("timePanel");
+  const on = showTimeOn();
+  el.classList.toggle("on", on);
+  if (!on || !state.data) { el.innerHTML = ""; return; }
+  const d = state.data, c = tcfg();
+  let sel = 0, all = 0;
+  for (const k in d.sum) { all += d.sum[k]; if (state.timeCats[k]) sel += d.sum[k]; }
+
+  let html = `<div class="thead"><span class="tot">${fmtSec(sel)}</span>` +
+    `<span class="lab">サイクルタイム</span></div>`;
+  for (const k of ["cut", "arc", "rapid", "dwell", "tool", "aux"]) {
+    if (!d.cnt[k]) continue;
+    html += `<div class="trow"><label class="nm"><input type="checkbox" data-cat="${k}"` +
+      `${state.timeCats[k] ? " checked" : ""}>${CAT_LABEL[k]}<span class="cnt">×${d.cnt[k]}</span></label>` +
+      `<span class="sec">${fmtSec(d.sum[k])}</span></div>`;
+  }
+  if (Math.abs(all - sel) > 1e-6)
+    html += `<div class="trow sum"><span class="nm">合計（全種別）</span><span class="sec">${fmtSec(all)}</span></div>`;
+
+  // 工具別（種別トグルを反映して数え直す）
+  const byTool = {};
+  const addT = (cat, tool, sec) => { if (tool >= 1 && state.timeCats[cat]) byTool[tool] = (byTool[tool] || 0) + sec; };
+  for (const sg of d.segs) addT(sg.cat, sg.tool, sg.sec);
+  for (const e of d.events) addT(e.cat, e.tool, e.sec);
+  const tls = Object.keys(byTool).map(Number).sort((a, b) => a - b);
+  if (tls.length) {
+    html += `<div class="sub">工具別</div><div class="tools">` + tls.map(t =>
+      `<span><i style="background:${toolColor(t)}"></i>T${t} ${fmtSec(byTool[t])}</span>`).join("") + `</div>`;
+  }
+
+  html += `<div class="btns"><label class="nm"><input type="checkbox" id="tLabelMode"` +
+    `${state.labelMode ? " checked" : ""}>クリックでラベルを個別ON/OFF</label></div>`;
+  if (state.timeHidden.size)
+    html += `<div class="btns"><span class="cnt">個別に消したラベル ${state.timeHidden.size}行</span>` +
+      `<button id="tShowAll">全部出す</button></div>`;
+
+  const unset = d.mSeen.filter(m => !(String(m) in c.mTable));
+  if (unset.length)
+    html += `<div class="sub">時間未設定のMコード</div><div class="btns">` +
+      `<span class="cnt">${unset.map(m => "M" + m).join(" ")}</span>` +
+      `<button id="tAddM">Mコード表に登録</button></div>`;
+  for (const w of d.warn) html += `<div class="warn">⚠ ${w}</div>`;
+  html += `<div class="btns"><button id="tOpenCfg">⚙ 時間設定（${machines.presets[machines.active].name}）</button></div>`;
+  el.innerHTML = html;
+
+  el.querySelectorAll("input[data-cat]").forEach(inp => inp.addEventListener("change", e => {
+    state.timeCats[e.target.dataset.cat] = e.target.checked;
+    renderTimePanel(); draw();
+  }));
+  const lm = el.querySelector("#tLabelMode");
+  if (lm) lm.addEventListener("change", e => setLabelMode(e.target.checked));
+  const sa = el.querySelector("#tShowAll");
+  if (sa) sa.addEventListener("click", () => { state.timeHidden.clear(); renderTimePanel(); draw(); });
+  const am = el.querySelector("#tAddM");
+  if (am) am.addEventListener("click", () => {
+    for (const m of unset) c.mTable[m] = 0;
+    saveMachines(); recalcTime(); openTimeCfg();
+  });
+  const oc = el.querySelector("#tOpenCfg");
+  if (oc) oc.addEventListener("click", openTimeCfg);
+}
+
+// ラベル個別選択モード（座標アシスト・交点測定とは排他）
+function setLabelMode(on) {
+  state.labelMode = !!on;
+  if (on) {
+    document.getElementById("editMode").checked = false;
+    document.getElementById("ixMode").checked = false;
+    state.ixFirst = null;
+    clearEditSel();
+  }
+  cv.style.cursor = (editModeOn() || ixModeOn() || state.labelMode) ? "pointer" : "crosshair";
+  updateIxHint();
+  renderTimePanel();
+  draw();
+}
+function toggleTimeLabel(lineNo) {
+  if (state.timeHidden.has(lineNo)) state.timeHidden.delete(lineNo); else state.timeHidden.add(lineNo);
+  renderTimePanel(); draw();
+}
+
+// ===== 時間設定ダイアログ =====
+const cfgDlg = document.getElementById("timeCfg");
+function openTimeCfg() { renderTimeCfg(); if (!cfgDlg.open) cfgDlg.showModal(); }
+
+function cfgNum(label, key, unit, step) {
+  return `<div class="cfg-row"><span class="lab">${label}</span>` +
+    `<input type="number" step="${step || "any"}" data-cf="${key}" value="${tcfg()[key]}">` +
+    `<span class="unit">${unit || ""}</span></div>`;
+}
+function cfgSel(label, key, opts) {
+  const v = tcfg()[key];
+  return `<div class="cfg-row"><span class="lab">${label}</span><select data-cf="${key}">` +
+    opts.map(o => `<option value="${o[0]}"${o[0] === v ? " selected" : ""}>${o[1]}</option>`).join("") +
+    `</select><span class="unit"></span></div>`;
+}
+function renderTimeCfg() {
+  const c = tcfg();
+  const sel = document.getElementById("cfgPreset");
+  sel.innerHTML = "";
+  machines.presets.forEach((pr, i) => {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = pr.name; o.selected = (i === machines.active);
+    sel.appendChild(o);
+  });
+
+  const mRows = Object.keys(c.mTable).map(Number).sort((a, b) => a - b);
+  document.getElementById("cfgBody").innerHTML =
+    `<h4>早送り (G0)</h4>` +
+    cfgNum("X軸", "rapidX", "m/min") + cfgNum("Z軸", "rapidZ", "m/min") +
+    `<div class="cfg-note">各軸が独立に最高速で動くので、時間は遅い方の軸で決まります。` +
+    `X軸は直径ではなく<b>半径</b>の移動量で評価します。</div>` +
+
+    `<h4>主軸</h4>` +
+    cfgNum("最高回転数", "spindleMax", "rpm") +
+    cfgNum("加減速（0⇔最高回転）", "spindleAccelSec", "秒") +
+    cfgNum("無視する回転数差", "spindleThreshold", "rpm") +
+    `<div class="cfg-note">プログラムに <code>G50 S____</code> があればそちらを最高回転として優先します。` +
+    `G96で切削中に径が変わって回転数が動く分は送りと重なるため数えません。</div>` +
+
+    `<h4>指令が無いときの既定</h4>` +
+    cfgSel("送りモード", "defaultFeedMode", [[99, "G99 毎回転 mm/rev"], [98, "G98 毎分 mm/min"]]) +
+    cfgSel("周速モード", "defaultCssMode", [[97, "G97 回転数一定"], [96, "G96 周速一定"]]) +
+    cfgNum("回転数 (G97)", "defaultRpm", "rpm") +
+    cfgNum("周速 (G96)", "defaultCss", "m/min") +
+    cfgNum("送り F", "defaultFeed", "") +
+
+    `<h4>非切削時間</h4>` +
+    cfgNum("工具交換 1回", "toolChangeSec", "秒") +
+    cfgNum("タレット段数", "turretStations", "", "1") +
+    cfgNum("　1段あたり", "turretStepSec", "秒") +
+    cfgNum("G28 原点復帰", "g28Sec", "秒") +
+    cfgNum("M0 プログラムストップ", "m0Sec", "秒") +
+    `<div class="cfg-row"><span class="lab">M1 オプショナルストップ</span>` +
+    `<label class="unit" style="width:auto"><input type="checkbox" data-cfb="m1Enabled"${c.m1Enabled ? " checked" : ""}> 有効</label>` +
+    `<input type="number" step="any" data-cf="m1Sec" value="${c.m1Sec}"><span class="unit">秒</span></div>` +
+    cfgNum("最小ブロック時間", "minBlockSec", "秒") +
+    `<div class="cfg-note">タレット段数を2以上、1段あたりを0より大きくすると、割出しの回り段数に比例した時間を上乗せします。</div>` +
+
+    `<h4>Mコード別の待ち時間</h4>` +
+    `<div class="mtab" id="mtab">` + mRows.map(m =>
+      `<span class="mrow">M<input type="number" class="mc" step="1" value="${m}">` +
+      `<input type="number" class="ms" step="any" value="${c.mTable[m]}">秒<button class="mdel">×</button></span>`).join("") +
+    `</div><div class="cfg-row"><button id="mAdd">＋ 行を追加</button></div>` +
+    `<div class="cfg-note">M0/M1/M3/M4/M5/M2/M30/M98/M99 は上の項目で扱うため、ここでは指定できません。</div>` +
+
+    `<h4>補正係数</h4>` +
+    cfgNum("切削 ×", "factorCut", "") + cfgNum("早送り ×", "factorRapid", "") +
+    `<div class="cfg-note">加減速やサーボ遅れをまとめて吸収するための係数です。実測サイクルタイムに合うよう調整してください。</div>`;
+
+  bindCfgInputs();
+}
+
+function bindCfgInputs() {
+  const body = document.getElementById("cfgBody");
+  body.querySelectorAll("[data-cf]").forEach(inp => inp.addEventListener("change", e => {
+    const k = e.target.dataset.cf;
+    const v = parseFloat(e.target.value);
+    tcfg()[k] = isFinite(v) ? v : DEFAULT_CFG[k];
+    if (!isFinite(v)) e.target.value = tcfg()[k];
+    saveMachines(); recalcTime();
+  }));
+  body.querySelectorAll("[data-cfb]").forEach(inp => inp.addEventListener("change", e => {
+    tcfg()[e.target.dataset.cfb] = e.target.checked;
+    saveMachines(); recalcTime();
+  }));
+  body.querySelectorAll(".mtab .mrow input").forEach(inp => inp.addEventListener("change", syncMTable));
+  body.querySelectorAll(".mtab .mdel").forEach(b => b.addEventListener("click", e => {
+    e.target.closest(".mrow").remove(); syncMTable();
+  }));
+  const add = document.getElementById("mAdd");
+  if (add) add.addEventListener("click", () => {
+    const row = document.createElement("span");
+    row.className = "mrow";
+    row.innerHTML = `M<input type="number" class="mc" step="1" value=""><input type="number" class="ms" step="any" value="1">秒<button class="mdel">×</button>`;
+    document.getElementById("mtab").appendChild(row);
+    row.querySelectorAll("input").forEach(i => i.addEventListener("change", syncMTable));
+    row.querySelector(".mdel").addEventListener("click", () => { row.remove(); syncMTable(); });
+    row.querySelector(".mc").focus();
+  });
+}
+
+// 表の行をそのまま読んで mTable を作り直す（行を消しても矛盾しない）
+function syncMTable() {
+  const t = {};
+  document.querySelectorAll("#mtab .mrow").forEach(r => {
+    const code = Math.abs(Math.round(parseFloat(r.querySelector(".mc").value)));
+    const sec = parseFloat(r.querySelector(".ms").value);
+    if (isFinite(code) && code > 0 && !M_HANDLED.has(code)) t[code] = isFinite(sec) ? sec : 0;
+  });
+  tcfg().mTable = t;
+  saveMachines(); recalcTime();
+}
+
+// プログラムは変わっていないので、行一覧は作り直さず時間だけ計算し直す
+function recalcTime() {
+  if (!state.data) { renderTimePanel(); return; }
+  state.data = parseNc(lastText, origins, tcfg(), flipOn());
+  reselectAfterReparse();
+  renderTimePanel();
+  syncTransport();
+  draw();
+}
+
+document.getElementById("timeCfgBtn").addEventListener("click", openTimeCfg);
+document.getElementById("cfgClose").addEventListener("click", () => cfgDlg.close());
+document.getElementById("cfgPreset").addEventListener("change", e => {
+  machines.active = parseInt(e.target.value, 10) || 0;
+  saveMachines(); renderTimeCfg(); recalcTime();
+});
+document.getElementById("cfgNew").addEventListener("click", () => {
+  const base = machines.presets[machines.active];
+  machines.presets.push({ name: base.name + " のコピー", cfg: JSON.parse(JSON.stringify(base.cfg)) });
+  machines.active = machines.presets.length - 1;
+  saveMachines(); renderTimeCfg(); recalcTime();
+});
+document.getElementById("cfgRename").addEventListener("click", () => {
+  const cur = machines.presets[machines.active];
+  const v = window.prompt("この機械設定の名前", cur.name);
+  if (v == null) return;
+  cur.name = v.trim() || cur.name;
+  saveMachines(); renderTimeCfg(); renderTimePanel();
+});
+document.getElementById("cfgDel").addEventListener("click", () => {
+  if (machines.presets.length <= 1) { machines.presets[0] = { name: "既定", cfg: Object.assign({}, DEFAULT_CFG) }; }
+  else machines.presets.splice(machines.active, 1);
+  machines.active = Math.min(machines.active, machines.presets.length - 1);
+  saveMachines(); renderTimeCfg(); recalcTime();
+});
+document.getElementById("cfgReset").addEventListener("click", () => {
+  machines.presets[machines.active].cfg = Object.assign({}, DEFAULT_CFG);
+  saveMachines(); renderTimeCfg(); recalcTime();
+});
+document.getElementById("showTime").addEventListener("change", () => { renderTimePanel(); draw(); });
+
 // 初期化（サンプルは埋め込まない：ファイルを読み込むまで空表示）
 renderAssist();
+renderTimePanel();
 resizeCanvas();
 </script>
 </body>
